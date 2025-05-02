@@ -134,6 +134,18 @@ SUICIDE_MESSAGES_BY_TYPE = {
         "miscalculated the landing zone",
         "did a high-speed ground inspection"
     ],
+    "vehicle": [
+        "earned a Darwin Award for vehicle safety",
+        "took 'crash test dummy' too literally",
+        "failed their driving test permanently",
+        "mistook themselves for a stunt driver",
+        "proved vehicles can be deadly weapons",
+        "crashed their own exit strategy",
+        "demonstrated how not to drive",
+        "achieved vehicular self-destruction",
+        "turned themselves into roadkill",
+        "became a casualty of their own driving"
+    ],
     "other": [
         "decided to experiment with their own mortality",
         "wanted to see the respawn screen",

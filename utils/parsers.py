@@ -93,6 +93,8 @@ class CSVParser:
             "suicide_by_relocation": "Suicide (Menu)",
             "suicide": "Suicide",
             "vehicle": "Vehicle",
+            "land_vehicle": "Land Vehicle",
+            "boat": "Boat",
             "grenade": "Grenade",
             "explosion": "Explosion",
             "fire": "Fire",
@@ -206,15 +208,21 @@ class CSVParser:
                 # Use current time as fallback
                 timestamp = datetime.datetime.utcnow()
             
-            # Determine if this is a suicide
+            # Determine if this is a suicide - only when killer ID equals victim ID
             is_suicide = killer_id == victim_id
             suicide_type = None
             
+            # Identify the type of death
+            weapon_lower = weapon.lower() if weapon else ""
+            
+            # Handle suicide cases where killer and victim are the same
             if is_suicide:
-                if weapon == "suicide_by_relocation":
+                if weapon_lower == "suicide_by_relocation":
                     suicide_type = "menu"
-                elif weapon == "falling":
+                elif weapon_lower == "falling":
                     suicide_type = "fall"
+                elif weapon_lower in ["land_vehicle", "boat", "vehicle"]:
+                    suicide_type = "vehicle"
                 else:
                     suicide_type = "other"
             
