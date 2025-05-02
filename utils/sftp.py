@@ -249,28 +249,52 @@ class SFTPClient:
                 self.last_error = f"Server directory for ID {self.server_id} not found"
                 return []
             
-            # Now we have the target directory, explore it to find CSV files
-            # We'll do a recursive exploration to handle multiple map directories
-            logger.info(f"Starting deep exploration of server directory: {target_directory}")
+            # Using the specified path structure: host_serverid/actual1/deathlogs
+            # We'll first check for the 'actual1' directory, then 'deathlogs'
+            logger.info(f"Looking for CSV files in the deathlogs directory structure")
             
-            # First check for CSV files in the main server directory
             try:
-                items = self.sftp.listdir(target_directory)
-                logger.info(f"Server directory contains {len(items)} items")
+                # Get server directory contents
+                server_items = self.sftp.listdir(target_directory)
+                logger.info(f"Server directory contains: {', '.join(server_items)}")
                 
-                # Check for any CSV files in the main directory
-                for item in items:
-                    if item.lower().endswith('.csv'):
-                        file_path = os.path.join(target_directory, item)
-                        logger.info(f"Found CSV file in server main directory: {item}")
-                        timestamp = datetime.datetime.now()
-                        csv_files.append((file_path, timestamp, item))
+                # Look for 'actual1' directory
+                actual_dir = None
+                for item in server_items:
+                    if item.lower() == "actual1":
+                        actual_dir = os.path.join(target_directory, item)
+                        logger.info(f"Found 'actual1' directory: {actual_dir}")
+                        break
+                
+                if not actual_dir:
+                    logger.warning("Could not find 'actual1' directory, will search all subdirectories")
+                    # Fall back to general search
+                    discovered_csv_paths = await self._find_csv_files_recursive(target_directory)
+                else:
+                    # Found actual1 directory, now look for 'deathlogs'
+                    actual_items = self.sftp.listdir(actual_dir)
+                    logger.info(f"'actual1' directory contains: {', '.join(actual_items)}")
+                    
+                    deathlogs_dir = None
+                    for item in actual_items:
+                        if item.lower() == "deathlogs":
+                            deathlogs_dir = os.path.join(actual_dir, item)
+                            logger.info(f"Found 'deathlogs' directory: {deathlogs_dir}")
+                            break
+                    
+                    if not deathlogs_dir:
+                        logger.warning("Could not find 'deathlogs' directory, will search in 'actual1' and its subdirectories")
+                        discovered_csv_paths = await self._find_csv_files_recursive(actual_dir)
+                    else:
+                        # Found deathlogs directory, look for CSV files here and in subdirectories
+                        logger.info(f"Searching for CSV files in deathlogs directory: {deathlogs_dir}")
+                        discovered_csv_paths = await self._find_csv_files_recursive(deathlogs_dir)
+                    
             except Exception as e:
-                logger.error(f"Error listing main server directory: {e}")
-                return []
-            
-            # Now search all subdirectories (including map-specific directories)
-            discovered_csv_paths = await self._find_csv_files_recursive(target_directory)
+                logger.error(f"Error exploring directory structure: {e}")
+                # Fall back to searching the entire server directory
+                logger.info("Falling back to general search in server directory")
+                discovered_csv_paths = await self._find_csv_files_recursive(target_directory)
             
             # Process all discovered CSV files
             for file_path in discovered_csv_paths:
@@ -395,61 +419,95 @@ class SFTPClient:
                 logger.error(f"Could not find server directory for server ID: {self.server_id}")
                 return None
             
-            # Do recursive search for log file similar to CSV file search
-            logger.info(f"Starting deep search for log file in: {target_directory}")
-            log_path = await self._find_log_file_recursive(target_directory)
-            
-            if log_path:
-                logger.info(f"Found log file at: {log_path}")
-                return log_path
-            else:
-                logger.warning(f"Log file {LOG_FILENAME} not found in any directory")
-                return None
+            # Using the specified path: host_serverid/Logs
+            # Look specifically for the 'Logs' directory
+            try:
+                server_items = self.sftp.listdir(target_directory)
+                logger.info(f"Server directory contains: {', '.join(server_items)}")
+                
+                # Find the Logs directory
+                logs_dir = None
+                for item in server_items:
+                    if item.lower() == "logs":
+                        logs_dir = os.path.join(target_directory, item)
+                        logger.info(f"Found 'Logs' directory: {logs_dir}")
+                        break
+                
+                if not logs_dir:
+                    logger.warning("Could not find 'Logs' directory, will search in server directory and its subdirectories")
+                    # Fall back to general search if we can't find the Logs directory
+                    return await self._find_specific_log_file(target_directory)
+                
+                # Check for Deadside.log in the Logs directory
+                logs_items = self.sftp.listdir(logs_dir)
+                logger.info(f"'Logs' directory contains: {', '.join(logs_items)}")
+                
+                if LOG_FILENAME in logs_items:
+                    log_path = os.path.join(logs_dir, LOG_FILENAME)
+                    logger.info(f"Found log file at: {log_path}")
+                    return log_path
+                else:
+                    logger.warning(f"'{LOG_FILENAME}' not found in Logs directory, checking subdirectories")
+                    return await self._find_specific_log_file(logs_dir)
+                    
+            except Exception as e:
+                logger.error(f"Error searching for log file: {e}")
+                # Fall back to general search
+                return await self._find_specific_log_file(target_directory)
                 
         except Exception as e:
             logger.error(f"Error getting log file: {e}", exc_info=True)
             return None
     
-    async def _find_log_file_recursive(self, directory, max_depth=3, current_depth=0):
-        """Recursively search for the log file in all subdirectories"""
+    async def _find_specific_log_file(self, directory, max_depth=2, current_depth=0):
+        """Search specifically for Deadside.log in the directory structure"""
         if current_depth > max_depth:
             return None
         
         try:
-            # Check for log file in current directory
-            items = self.sftp.listdir(directory)
-            
-            # Check if log file exists in this directory
-            if LOG_FILENAME in items:
-                log_path = os.path.join(directory, LOG_FILENAME)
-                logger.info(f"Found log file in directory: {directory}")
-                return log_path
-            
-            # Check all subdirectories
-            for item in items:
-                item_path = os.path.join(directory, item)
+            # First check if Deadside.log exists in this directory
+            try:
+                items = self.sftp.listdir(directory)
                 
-                try:
-                    # Check if it's a directory
-                    if self._is_dir(item_path):
-                        logger.info(f"Checking subdirectory for log file: {item_path} (depth {current_depth})")
-                        # Search recursively
-                        log_path = await self._find_log_file_recursive(
-                            item_path, max_depth, current_depth + 1
-                        )
-                        
-                        # If found, return the path
-                        if log_path:
-                            return log_path
-                except Exception as e:
-                    logger.warning(f"Error checking subdirectory {item_path}: {e}")
-                    continue
+                if LOG_FILENAME in items:
+                    log_path = os.path.join(directory, LOG_FILENAME)
+                    logger.info(f"Found {LOG_FILENAME} in directory: {directory}")
+                    return log_path
+            except Exception as list_e:
+                logger.warning(f"Error listing directory {directory}: {list_e}")
+                return None
             
-            # No log file found in this directory or its subdirectories
+            # If not found, check subdirectories
+            for item in items:
+                # Only look for directories named 'Logs' or any directory if we're at depth 0
+                if item.lower() == "logs" or current_depth == 0:
+                    item_path = os.path.join(directory, item)
+                    
+                    try:
+                        if self._is_dir(item_path):
+                            # First check this directory for the log file
+                            subdir_items = self.sftp.listdir(item_path)
+                            
+                            if LOG_FILENAME in subdir_items:
+                                log_path = os.path.join(item_path, LOG_FILENAME)
+                                logger.info(f"Found {LOG_FILENAME} in subdirectory: {item_path}")
+                                return log_path
+                            
+                            # If not found, recurse deeper
+                            log_path = await self._find_specific_log_file(
+                                item_path, max_depth, current_depth + 1
+                            )
+                            if log_path:
+                                return log_path
+                    except Exception as e:
+                        logger.warning(f"Error processing subdirectory {item_path}: {e}")
+                        continue
+            
+            # Not found in this directory or its subdirectories
             return None
                 
         except Exception as e:
-            logger.error(f"Error exploring directory {directory} for log file: {e}")
+            logger.error(f"Error searching for {LOG_FILENAME}: {e}")
             return None
     
     async def read_file(self, file_path, start_line=0, max_lines=None):
