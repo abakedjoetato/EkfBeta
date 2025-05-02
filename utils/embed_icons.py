@@ -74,6 +74,46 @@ def add_icon_to_embed(embed: discord.Embed, icon_path: Optional[str]) -> None:
     embed.set_thumbnail(url=f"attachment://{os.path.basename(icon_path)}")
     return
 
+async def send_embed_with_icon(ctx_or_channel, embed: discord.Embed, icon_path: Optional[str]) -> Optional[discord.Message]:
+    """Helper function to send an embed with its icon consistently
+    
+    Args:
+        ctx_or_channel: Context or channel to send the message to
+        embed: The embed to send
+        icon_path: Path to the icon file to attach
+        
+    Returns:
+        discord.Message: The sent message or None if failed
+    """
+    try:
+        # Create the file for the icon if a path is provided
+        file = None
+        if icon_path and os.path.exists(icon_path):
+            file = create_discord_file(icon_path)
+        
+        # Send the message with the file if available
+        if hasattr(ctx_or_channel, 'send'):
+            if file:
+                return await ctx_or_channel.send(embed=embed, file=file)
+            else:
+                return await ctx_or_channel.send(embed=embed)
+        elif hasattr(ctx_or_channel, 'followup'):
+            if file:
+                return await ctx_or_channel.followup.send(embed=embed, file=file)
+            else:
+                return await ctx_or_channel.followup.send(embed=embed)
+        return None
+    except Exception as e:
+        # Fall back to sending without the file if there's an error
+        try:
+            if hasattr(ctx_or_channel, 'send'):
+                return await ctx_or_channel.send(embed=embed)
+            elif hasattr(ctx_or_channel, 'followup'):
+                return await ctx_or_channel.followup.send(embed=embed)
+            return None
+        except:
+            return None
+
 def get_icon_for_embed_type(embed_type: str) -> Optional[str]:
     """Get the appropriate icon for an embed type
     
