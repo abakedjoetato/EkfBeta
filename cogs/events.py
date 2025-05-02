@@ -6,7 +6,7 @@ import asyncio
 import discord
 from discord.ext import commands
 from discord import app_commands
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 
 from models.guild import Guild
@@ -18,6 +18,58 @@ from utils.embed_builder import EmbedBuilder
 from utils.helpers import has_admin_permission, update_voice_channel_name
 
 logger = logging.getLogger(__name__)
+
+async def server_id_autocomplete(interaction, current):
+    """Autocomplete for server IDs"""
+    try:
+        # Get user's guild ID
+        guild_id = interaction.guild_id
+        
+        # Get cached server data or fetch it
+        cog = interaction.client.get_cog("Events")
+        if not cog:
+            cog = interaction.client.get_cog("Stats")  # Fallback to Stats cog cache
+        
+        if not cog or not hasattr(cog, "server_autocomplete_cache"):
+            # Initialize cache if it doesn't exist
+            if not hasattr(cog, "server_autocomplete_cache"):
+                cog.server_autocomplete_cache = {}
+        
+        # Update cache if needed
+        if guild_id not in cog.server_autocomplete_cache or \
+           (datetime.now() - cog.server_autocomplete_cache.get(guild_id, {}).get("last_update", datetime.min)).total_seconds() > 300:
+            
+            # Fetch guild data
+            guild_data = await interaction.client.db.guilds.find_one({"guild_id": guild_id})
+            
+            if guild_data and "servers" in guild_data:
+                # Update cache
+                cog.server_autocomplete_cache[guild_id] = {
+                    "servers": [
+                        {
+                            "id": server.get("server_id", ""),
+                            "name": server.get("server_name", "Unknown Server")
+                        }
+                        for server in guild_data.get("servers", [])
+                    ],
+                    "last_update": datetime.now()
+                }
+        
+        # Get servers from cache
+        servers = cog.server_autocomplete_cache.get(guild_id, {}).get("servers", [])
+        
+        # Filter by current input
+        filtered_servers = [
+            app_commands.Choice(name=server['name'], value=server['id'])
+            for server in servers
+            if current.lower() in server['id'].lower() or current.lower() in server['name'].lower()
+        ]
+        
+        return filtered_servers[:25]
+        
+    except Exception as e:
+        logger.error(f"Error in server autocomplete: {e}", exc_info=True)
+        return [app_commands.Choice(name="Error loading servers", value="error")]
 
 class Events(commands.Cog):
     """Events commands and background tasks"""
@@ -108,6 +160,7 @@ class Events(commands.Cog):
     
     @events.command(name="start", description="Start monitoring events for a server")
     @app_commands.describe(server_id="Select a server to monitor")
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def start(self, ctx, server_id: str):
         """Start the events monitor for a server"""
         
@@ -215,6 +268,7 @@ class Events(commands.Cog):
     
     @events.command(name="stop", description="Stop monitoring events for a server")
     @app_commands.describe(server_id="Select a server to stop monitoring")
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def stop(self, ctx, server_id: str):
         """Stop the events monitor for a server"""
         
@@ -1165,8 +1219,18 @@ async def process_event(bot, server, event_data, channel):
         # Create embed for the event
         embed = EmbedBuilder.create_event_embed(event_data, guild=guild_model)
         
-        # Send to channel
-        await channel.send(embed=embed)
+        # Get the icon file for the specific event type
+        from utils.embed_icons import create_discord_file, get_event_icon
+        # Get the event icon based on the event type
+        event_icon_path = get_event_icon(event_data.get("type", "unknown"))
+        icon_file = create_discord_file(event_icon_path) if event_icon_path else None
+        
+        # Send to channel with the event icon
+        if icon_file:
+            await channel.send(embed=embed, file=icon_file)
+        else:
+            # Fallback if file can't be created
+            await channel.send(embed=embed)
         
         # Handle server restart event specially
         if event_data["type"] == "server_restart":
@@ -1229,8 +1293,16 @@ async def process_connection(bot, server, connection_data, channel):
         embed.timestamp = connection_data["timestamp"]
         embed.add_field(name="Platform", value=platform, inline=True)
         
-        # Send to channel
-        await channel.send(embed=embed)
+        # Get the icon file for the connection event
+        from utils.embed_icons import create_discord_file, CONNECTIONS_ICON
+        icon_file = create_discord_file(CONNECTIONS_ICON)
+        
+        # Send to channel with connection icon
+        if icon_file:
+            await channel.send(embed=embed, file=icon_file)
+        else:
+            # Fallback if file can't be created
+            await channel.send(embed=embed)
         
     except Exception as e:
         logger.error(f"Error processing connection: {e}", exc_info=True)

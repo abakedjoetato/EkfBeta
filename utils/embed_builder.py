@@ -2,10 +2,17 @@
 Utility for building consistent Discord embeds
 """
 import random
+import os
 import discord
 from datetime import datetime
 
 from config import EMBED_THEMES, EMBED_COLOR, EMBED_FOOTER, SUICIDE_MESSAGES, SUICIDE_MESSAGES_BY_TYPE
+from utils.embed_icons import (
+    add_icon_to_embed, create_discord_file, get_event_icon,
+    get_icon_for_embed_type, KILLFEED_ICON, DEFAULT_ICON,
+    EVENT_ICONS, WEAPON_STATS_ICON, CONNECTIONS_ICON,
+    LEADERBOARD_ICON, FACTIONS_ICON
+)
 
 class EmbedBuilder:
     """Builder for creating Discord embeds with consistent styling"""
@@ -84,6 +91,9 @@ class EmbedBuilder:
                 inline=True
             )
             
+            # Add killfeed icon to the suicide embed
+            add_icon_to_embed(embed, KILLFEED_ICON)
+            
         else:
             # Regular kill
             embed = EmbedBuilder.create_base_embed(
@@ -98,6 +108,9 @@ class EmbedBuilder:
             # Add distance field if available
             if kill_data["distance"] > 0:
                 embed.add_field(name="Distance", value=f"{kill_data['distance']}m", inline=True)
+            
+            # Add killfeed icon to the kill embed
+            add_icon_to_embed(embed, KILLFEED_ICON)
         
         # Add timestamp field
         timestamp_str = kill_data["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
@@ -146,6 +159,11 @@ class EmbedBuilder:
         # Add timestamp field
         timestamp_str = event_data["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
         embed.add_field(name="Time", value=timestamp_str, inline=True)
+        
+        # Get the appropriate icon for this event type
+        event_type = event_data["event_type"]
+        icon_path = get_event_icon(event_type)
+        add_icon_to_embed(embed, icon_path)
         
         return embed
     
@@ -209,6 +227,9 @@ class EmbedBuilder:
                 inline=True
             )
         
+        # Add icon for player stats
+        add_icon_to_embed(embed, WEAPON_STATS_ICON)
+        
         return embed
     
     @staticmethod
@@ -248,6 +269,9 @@ class EmbedBuilder:
                 inline=True
             )
         
+        # Add icon for server stats
+        add_icon_to_embed(embed, LEADERBOARD_ICON)
+        
         return embed
     
     @staticmethod
@@ -265,6 +289,7 @@ class EmbedBuilder:
         # Use base embed for consistent theming, but override with red for errors
         embed = EmbedBuilder.create_base_embed(title, description, guild)
         embed.color = discord.Color.red()
+        add_icon_to_embed(embed, get_icon_for_embed_type("error"))
         return embed
     
     @staticmethod
@@ -284,6 +309,7 @@ class EmbedBuilder:
         # For success embeds, we'll use green if default theme, otherwise use the theme color
         if not guild or not hasattr(guild, 'theme') or guild.theme == "default":
             embed.color = discord.Color.green()
+        add_icon_to_embed(embed, get_icon_for_embed_type("success"))
         return embed
         
     @staticmethod
@@ -302,6 +328,7 @@ class EmbedBuilder:
         embed = EmbedBuilder.create_base_embed(title, description, guild)
         # For info embeds, we'll use blue
         embed.color = discord.Color.blue()
+        add_icon_to_embed(embed, get_icon_for_embed_type("info"))
         return embed
     
     @staticmethod
@@ -325,5 +352,8 @@ class EmbedBuilder:
             progress_bar = f"{percentage}% complete"
             embed.add_field(name="Progress", value=progress_bar, inline=False)
             embed.add_field(name="Status", value=f"{progress}/{total}", inline=False)
+        
+        # Add info icon to progress embeds
+        add_icon_to_embed(embed, get_icon_for_embed_type("info"))
         
         return embed

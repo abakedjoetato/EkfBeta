@@ -6,7 +6,7 @@ import asyncio
 import discord
 from discord.ext import commands
 from discord import app_commands
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 
 from models.guild import Guild
@@ -18,6 +18,58 @@ from utils.embed_builder import EmbedBuilder
 from utils.helpers import has_admin_permission
 
 logger = logging.getLogger(__name__)
+
+async def server_id_autocomplete(interaction, current):
+    """Autocomplete for server IDs"""
+    try:
+        # Get user's guild ID
+        guild_id = interaction.guild_id
+        
+        # Get cached server data or fetch it
+        cog = interaction.client.get_cog("Killfeed")
+        if not cog:
+            cog = interaction.client.get_cog("Stats")  # Fallback to Stats cog cache
+        
+        if not cog or not hasattr(cog, "server_autocomplete_cache"):
+            # Initialize cache if it doesn't exist
+            if not hasattr(cog, "server_autocomplete_cache"):
+                cog.server_autocomplete_cache = {}
+        
+        # Update cache if needed
+        if guild_id not in cog.server_autocomplete_cache or \
+           (datetime.now() - cog.server_autocomplete_cache.get(guild_id, {}).get("last_update", datetime.min)).total_seconds() > 300:
+            
+            # Fetch guild data
+            guild_data = await interaction.client.db.guilds.find_one({"guild_id": guild_id})
+            
+            if guild_data and "servers" in guild_data:
+                # Update cache
+                cog.server_autocomplete_cache[guild_id] = {
+                    "servers": [
+                        {
+                            "id": server.get("server_id", ""),
+                            "name": server.get("server_name", "Unknown Server")
+                        }
+                        for server in guild_data.get("servers", [])
+                    ],
+                    "last_update": datetime.now()
+                }
+        
+        # Get servers from cache
+        servers = cog.server_autocomplete_cache.get(guild_id, {}).get("servers", [])
+        
+        # Filter by current input
+        filtered_servers = [
+            app_commands.Choice(name=server['name'], value=server['id'])
+            for server in servers
+            if current.lower() in server['id'].lower() or current.lower() in server['name'].lower()
+        ]
+        
+        return filtered_servers[:25]
+        
+    except Exception as e:
+        logger.error(f"Error in server autocomplete: {e}", exc_info=True)
+        return [app_commands.Choice(name="Error loading servers", value="error")]
 
 class Killfeed(commands.Cog):
     """Killfeed commands and background tasks"""
@@ -34,6 +86,7 @@ class Killfeed(commands.Cog):
     
     @killfeed.command(name="start", description="Start monitoring killfeed for a server")
     @app_commands.describe(server_id="Select a server to monitor")
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def start(self, ctx, server_id: str):
         """Start the killfeed monitor for a server"""
         try:
@@ -130,6 +183,7 @@ class Killfeed(commands.Cog):
     
     @killfeed.command(name="stop", description="Stop monitoring killfeed for a server")
     @app_commands.describe(server_id="Select a server to stop monitoring")
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def stop(self, ctx, server_id: str):
         """Stop the killfeed monitor for a server"""
         
@@ -482,8 +536,16 @@ async def process_kill_event(bot, server, kill_event, channel):
                 inline=False
             )
         
-        # Send to channel
-        kill_message = await channel.send(embed=embed)
+        # Get the icon file for the kill embed
+        from utils.embed_icons import create_discord_file, KILLFEED_ICON
+        icon_file = create_discord_file(KILLFEED_ICON)
+        
+        # Send to channel with the icon file
+        if icon_file:
+            kill_message = await channel.send(embed=embed, file=icon_file)
+        else:
+            # Fallback if file can't be created
+            kill_message = await channel.send(embed=embed)
         
         # Update player stats and get economy results
         await update_player_stats(bot, server.id, kill_event)
@@ -555,19 +617,23 @@ async def process_kill_event(bot, server, kill_event, channel):
 async def update_player_stats(bot, server_id, kill_event):
     """Update player statistics based on a kill event"""
     try:
-        # Get or create killer player
+        # Get or create killer player with direct database query to ensure fresh data
+        killer_id = kill_event["killer_id"]
+        killer_name = kill_event["killer_name"]
         killer_data = {
-            "player_id": kill_event["killer_id"],
-            "player_name": kill_event["killer_name"],
+            "player_id": killer_id,
+            "player_name": killer_name,
             "server_id": server_id,
             "active": True
         }
         killer = await Player.create_or_update(bot.db, killer_data)
         
-        # Get or create victim player
+        # Get or create victim player with direct database query to ensure fresh data
+        victim_id = kill_event["victim_id"]
+        victim_name = kill_event["victim_name"]
         victim_data = {
-            "player_id": kill_event["victim_id"],
-            "player_name": kill_event["victim_name"],
+            "player_id": victim_id,
+            "player_name": victim_name,
             "server_id": server_id,
             "active": True
         }
@@ -583,31 +649,78 @@ async def update_player_stats(bot, server_id, kill_event):
         
         # Handle suicide case
         if kill_event["is_suicide"]:
-            await victim.record_suicide(kill_event["suicide_type"])
+            # For suicides, get fresh data to ensure stats are up to date
+            victim = await Player.get_by_id(bot.db, victim_id, server_id)
+            if not victim:
+                victim = await Player.create_or_update(bot.db, victim_data)
+                
+            # Record the suicide
+            suicide_result = await victim.record_suicide(kill_event["suicide_type"])
+            
+            # Verify the suicide was recorded
+            if not suicide_result:
+                logger.warning(f"Failed to record suicide for player {victim_name} ({victim_id}) - retrying with updated data")
+                # Try one more time with fresh data
+                victim = await Player.get_by_id(bot.db, victim_id, server_id)
+                if victim:
+                    await victim.record_suicide(kill_event["suicide_type"])
             
             # Economy penalty for suicide if enabled
             if has_economy:
                 from models.economy import Economy
-                victim_economy = await Economy.get_by_player(bot.db, victim.id, server_id)
+                victim_economy = await Economy.get_by_player(bot.db, victim_id, server_id)
                 if victim_economy:
                     # Small penalty for suicide
                     await victim_economy.remove_currency(5, "suicide_penalty", {
                         "suicide_type": kill_event.get("suicide_type", "unknown")
                     })
         else:
+            # For kills, get fresh data to ensure stats are up to date
+            killer = await Player.get_by_id(bot.db, killer_id, server_id)
+            victim = await Player.get_by_id(bot.db, victim_id, server_id)
+            
+            if not killer:
+                killer = await Player.create_or_update(bot.db, killer_data)
+            if not victim:
+                victim = await Player.create_or_update(bot.db, victim_data)
+                
             # Record kill for killer
-            await killer.record_kill(
+            kill_result = await killer.record_kill(
                 victim_id=victim.id,
                 victim_name=victim.name,
                 weapon=kill_event["weapon"],
                 distance=kill_event["distance"]
             )
             
+            # Verify the kill was recorded
+            if not kill_result:
+                logger.warning(f"Failed to record kill for player {killer_name} ({killer_id}) - retrying with updated data")
+                # Try one more time with fresh data
+                killer = await Player.get_by_id(bot.db, killer_id, server_id)
+                if killer:
+                    await killer.record_kill(
+                        victim_id=victim.id,
+                        victim_name=victim.name,
+                        weapon=kill_event["weapon"],
+                        distance=kill_event["distance"]
+                    )
+            
             # Record death for victim
-            await victim.record_death(
+            death_result = await victim.record_death(
                 killer_id=killer.id,
                 killer_name=killer.name
             )
+            
+            # Verify the death was recorded
+            if not death_result:
+                logger.warning(f"Failed to record death for player {victim_name} ({victim_id}) - retrying with updated data")
+                # Try one more time with fresh data
+                victim = await Player.get_by_id(bot.db, victim_id, server_id)
+                if victim:
+                    await victim.record_death(
+                        killer_id=killer.id,
+                        killer_name=killer.name
+                    )
             
             # Award currency for kill if economy feature is enabled
             if has_economy:
@@ -669,6 +782,13 @@ async def update_player_stats(bot, server_id, kill_event):
                     "distance": distance
                 })
         
+        # Explicitly update leaderboards by resetting cache
+        # This is a workaround to ensure leaderboards reflect the new stats
+        if hasattr(bot, "leaderboard_cache"):
+            cache_key = f"leaderboard_{server_id}_kills"
+            if cache_key in bot.leaderboard_cache:
+                del bot.leaderboard_cache[cache_key]
+                
     except Exception as e:
         logger.error(f"Error updating player stats: {e}", exc_info=True)
 
