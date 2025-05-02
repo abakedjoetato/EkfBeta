@@ -42,7 +42,7 @@ class Setup(commands.Cog):
         password="SFTP password"
     )
     @app_commands.guild_only()
-    async def add_server(self, ctx, server_id: str, server_name: str, host: str, username: str, password: str, port: int = 22):
+    async def add_server(self, ctx, server_id: str, server_name: str, host: str, port: int = 22, username: str = "", password: str = ""):
         """Add a new server to track"""
         try:
             # Get guild model for themed embed

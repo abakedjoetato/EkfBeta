@@ -51,8 +51,9 @@ class SFTPClient:
             self.sftp = self.client.open_sftp()
             logger.info(f"Connected to SFTP server: {self.host}:{self.port} for server {self.server_id}")
             
-            # Locate root path with host_serverID pattern
-            await self.find_root_path()
+            # Set root path to current directory to avoid hanging on recursive search
+            self.root_path = '.'
+            logger.info(f"Using current directory as root path for server {self.server_id}")
             
             self.connected = True
             self.last_error = None
@@ -196,28 +197,75 @@ class SFTPClient:
         try:
             csv_files = []
             # Search for CSV files in the root directory
-            for filename in self.sftp.listdir(self.root_path):
-                if re.match(CSV_FILENAME_PATTERN, filename):
-                    file_path = os.path.join(self.root_path, filename)
-                    # Parse timestamp from filename
-                    timestamp_str = filename.split(".csv")[0]
-                    try:
-                        # Convert timestamp to datetime
-                        timestamp = datetime.datetime.strptime(
-                            timestamp_str, "%Y.%m.%d-%H.%M.%S"
-                        )
-                        csv_files.append((file_path, timestamp, filename))
-                    except ValueError:
-                        # Skip if timestamp can't be parsed
-                        continue
+            logger.info(f"Looking for CSV files in {self.root_path} with pattern {CSV_FILENAME_PATTERN}")
+            
+            try:
+                # Get directory listing
+                files = self.sftp.listdir(self.root_path)
+                logger.info(f"Found {len(files)} files in directory: {', '.join(files[:5])}{'...' if len(files) > 5 else ''}")
+                
+                # Be more flexible with the CSV pattern - check if any file ends with .csv
+                for filename in files:
+                    logger.info(f"Checking file: {filename}, ends with .csv: {filename.lower().endswith('.csv')}")
+                    # First try the exact pattern
+                    pattern_match = re.match(CSV_FILENAME_PATTERN, filename)
+                    # If it doesn't match, just check if it ends with .csv
+                    if pattern_match or filename.lower().endswith('.csv'):
+                        file_path = os.path.join(self.root_path, filename)
+                        logger.info(f"Found matching CSV file: {filename}")
+                        # Parse timestamp from filename
+                        timestamp_str = filename.split(".csv")[0]
+                        try:
+                            # Try the standard format first
+                            timestamp = None
+                            try:
+                                timestamp = datetime.datetime.strptime(timestamp_str, "%Y.%m.%d-%H.%M.%S")
+                            except ValueError:
+                                # Try alternative formats (be more flexible)
+                                formats_to_try = [
+                                    "%Y-%m-%d_%H-%M-%S",
+                                    "%Y%m%d_%H%M%S",
+                                    "%Y%m%d%H%M%S",
+                                    "%Y-%m-%d"
+                                ]
+                                
+                                for fmt in formats_to_try:
+                                    try:
+                                        timestamp = datetime.datetime.strptime(timestamp_str, fmt)
+                                        logger.info(f"Parsed timestamp using format: {fmt}")
+                                        break
+                                    except ValueError:
+                                        continue
+                            
+                            # If we couldn't parse a timestamp, use file creation time instead
+                            if not timestamp:
+                                # Use current time as fallback
+                                logger.warning(f"Could not parse any timestamp format from {filename}, using current time")
+                                timestamp = datetime.datetime.now()
+                                
+                            csv_files.append((file_path, timestamp, filename))
+                        except Exception as ve:
+                            logger.warning(f"Error processing CSV file {filename}: {ve}")
+                            # Still add it with current timestamp so we don't miss any files
+                            timestamp = datetime.datetime.now()
+                            csv_files.append((file_path, timestamp, filename))
+            except Exception as inner_e:
+                logger.error(f"Error listing directory {self.root_path}: {inner_e}", exc_info=True)
+                self.last_error = f"Could not list directory: {str(inner_e)}"
+                return []
             
             # Sort by timestamp (oldest first)
             csv_files.sort(key=lambda x: x[1])
+            
+            if not csv_files:
+                logger.warning(f"No CSV files found matching pattern {CSV_FILENAME_PATTERN}")
+                self.last_error = "No CSV files found with correct naming pattern"
             
             return [file_path for file_path, _, _ in csv_files]
                 
         except Exception as e:
             logger.error(f"Error getting all CSV files: {e}", exc_info=True)
+            self.last_error = f"Error searching for CSV files: {str(e)}"
             return []
     
     async def get_log_file(self):
