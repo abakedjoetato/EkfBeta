@@ -66,7 +66,13 @@ async def server_id_autocomplete(interaction, current):
         # Filter servers based on current input
         choices = []
         for server in servers:
-            server_id = server.get("server_id", "")
+            # Always ensure server_id is a string for consistent comparison
+            raw_server_id = server.get("server_id", "")
+            server_id = str(raw_server_id) if raw_server_id is not None else ""
+            
+            # Log the type conversions for debugging
+            logger.debug(f"Autocomplete converting server_id from {type(raw_server_id).__name__} to string: {server_id}")
+            
             # Get proper server name, check both keys: 'name' and 'server_name'
             server_name = server.get("server_name", server.get("name", "Unknown"))
             
@@ -79,7 +85,7 @@ async def server_id_autocomplete(interaction, current):
                 # Format: "ServerName (ServerID)"
                 choices.append(app_commands.Choice(
                     name=f"{server_name} ({server_id})",
-                    value=server_id
+                    value=server_id  # Ensure this is a string
                 ))
         
         return choices[:25]  # Discord has a limit of 25 choices
@@ -347,6 +353,9 @@ class Setup(commands.Cog):
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def remove_server(self, ctx, server_id: str):
         """Remove a server from tracking"""
+        # Ensure server_id is a string for consistent comparison
+        server_id = str(server_id) if server_id is not None else ""
+        logger.info(f"Normalized server_id to string: {server_id}")
         
         try:
             # Defer response to prevent timeout
@@ -381,7 +390,9 @@ class Setup(commands.Cog):
             server_exists = False
             server_name = server_id
             for server in guild.servers:
-                if server.get("server_id") == server_id:
+                server_id_from_db = server.get("server_id")
+                # Ensure string comparison for compatibility with autocomplete
+                if str(server_id_from_db) == str(server_id):
                     server_exists = True
                     server_name = server.get("server_name", server_id)
                     break
@@ -528,6 +539,10 @@ class Setup(commands.Cog):
         logger.info(f"Configuring channels for server ID: {server_id} (type: {type(server_id).__name__})")
         logger.info(f"Setting up channels in guild ID: {ctx.guild.id} (type: {type(ctx.guild.id).__name__})")
         
+        # Ensure server_id is a string for consistent comparison
+        server_id = str(server_id) if server_id is not None else ""
+        logger.info(f"Normalized server_id to string: {server_id}")
+        
         # Diagnostics: Check for guild data with both string and int formats
         guild_data_string = await self.bot.db.guilds.find_one({"guild_id": str(ctx.guild.id)})
         guild_data_int = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
@@ -587,8 +602,11 @@ class Setup(commands.Cog):
             if hasattr(guild, 'servers') and guild.servers:
                 logger.info(f"Guild has {len(guild.servers)} servers: {[s.get('server_id') for s in guild.servers]}")
                 for s in guild.servers:
-                    logger.info(f"Checking server data: {s.get('server_id')} == {server_id}?")
-                    if s.get("server_id") == server_id:
+                    server_id_from_db = s.get('server_id')
+                    logger.info(f"Checking server data: {server_id_from_db} == {server_id}?")
+                    logger.info(f"Comparing server_id types: {type(server_id_from_db).__name__} vs {type(server_id).__name__}")
+                    # Ensure string comparison for compatibility with autocomplete
+                    if str(server_id_from_db) == str(server_id):
                         logger.info(f"Found matching server: {s.get('server_name')}")
                         server = Server(self.bot.db, s)
                         break
@@ -930,6 +948,9 @@ class Setup(commands.Cog):
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def historical_parse(self, ctx, server_id: str):
         """Parse all historical data for a server"""
+        # Ensure server_id is a string for consistent comparison
+        server_id = str(server_id) if server_id is not None else ""
+        logger.info(f"Normalized server_id to string: {server_id}")
         
         try:
             # Defer response to prevent timeout
