@@ -298,6 +298,7 @@ class Premium(commands.Cog):
         guild_id="The ID of the guild to set premium for",
         tier="The premium tier to set (0-3)"
     )
+    # Note: This command uses guild_id, not server_id, as it operates on guilds not servers
     async def set_premium(self, ctx, guild_id: str, tier: int):
         """Set premium tier for a guild (admin only)"""
         

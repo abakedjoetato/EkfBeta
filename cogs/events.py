@@ -426,6 +426,7 @@ class Events(commands.Cog):
         app_commands.Choice(name="Special Encounters", value="encounter"),
         app_commands.Choice(name="Server Restarts", value="server_restart")
     ])
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def list_events(self, ctx, server_id: str, event_type: str = "all", limit: int = 10):
         """List recent events for a server"""
         
@@ -549,6 +550,7 @@ class Events(commands.Cog):
     
     @events.command(name="players", description="List online players for a server")
     @app_commands.describe(server_id="Select a server to list players for")
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def online_players(self, ctx, server_id: str):
         """List online players for a server"""
         
@@ -649,6 +651,7 @@ class Events(commands.Cog):
         encounter="Enable encounter event notifications (True/False)",
         server_restart="Enable server restart notifications (True/False)"
     )
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def configure_events(self, ctx, server_id: str, 
                              mission: Optional[bool] = None,
                              airdrop: Optional[bool] = None,
@@ -774,6 +777,7 @@ class Events(commands.Cog):
         connect="Enable player connection notifications (True/False)",
         disconnect="Enable player disconnection notifications (True/False)"
     )
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def configure_connections(self, ctx, server_id: str, 
                                 connect: Optional[bool] = None,
                                 disconnect: Optional[bool] = None):
@@ -884,6 +888,7 @@ class Events(commands.Cog):
         fall="Enable fall damage suicide notifications (True/False)",
         other="Enable other suicide notifications (True/False)"
     )
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def configure_suicides(self, ctx, server_id: str, 
                                menu: Optional[bool] = None,
                                fall: Optional[bool] = None,

@@ -19,6 +19,72 @@ from utils.parsers import CSVParser
 
 logger = logging.getLogger(__name__)
 
+# Cache for server list to improve autocomplete performance
+SERVER_CACHE = {}
+SERVER_CACHE_TIMEOUT = 300  # 5 minutes
+
+async def server_id_autocomplete(interaction, current):
+    """Autocomplete for server IDs"""
+    try:
+        # Get user's guild ID
+        guild_id = interaction.guild_id
+        
+        # Get cached server data or fetch it
+        cog = interaction.client.get_cog("Setup")
+        if not cog:
+            # Fall back to a simple fetch if cog not available
+            bot = interaction.client
+            guild_data = await bot.db.guilds.find_one({"guild_id": guild_id})
+            servers = []
+            
+            if guild_data and "servers" in guild_data:
+                # Get server data
+                servers = guild_data["servers"]
+        else:
+            # Try to get data from cache first
+            cache_key = f"servers_{guild_id}"
+            cached_data = SERVER_CACHE.get(cache_key)
+            
+            if cached_data and (datetime.now() - cached_data["timestamp"]).total_seconds() < SERVER_CACHE_TIMEOUT:
+                # Use cached data if it's still valid
+                servers = cached_data["servers"]
+            else:
+                # Fetch fresh data and update cache
+                guild_data = await cog.bot.db.guilds.find_one({"guild_id": guild_id})
+                servers = []
+                
+                if guild_data and "servers" in guild_data:
+                    # Get server data
+                    servers = guild_data["servers"]
+                    
+                # Update cache
+                SERVER_CACHE[cache_key] = {
+                    "timestamp": datetime.now(),
+                    "servers": servers
+                }
+        
+        # Filter servers based on current input
+        choices = []
+        for server in servers:
+            server_id = server.get("server_id", "")
+            server_name = server.get("name", "Unknown")
+            display_name = f"server:{server_name}"
+            
+            if current.lower() in display_name.lower() or current.lower() in server_id.lower():
+                # Format: "server:MyServerName" (ServerID)
+                choices.append(app_commands.Choice(
+                    name=f"{display_name} ({server_id})",
+                    value=server_id
+                ))
+        
+        return choices[:25]  # Discord has a limit of 25 choices
+        
+    except Exception as e:
+        logger.error(f"Error in server_id_autocomplete: {e}", exc_info=True)
+        return []
+
+logger = logging.getLogger(__name__)
+
 class Setup(commands.Cog):
     """Setup commands for configuring servers and channels"""
     
@@ -273,6 +339,7 @@ class Setup(commands.Cog):
     
     @setup.command(name="removeserver", description="Remove a server")
     @app_commands.describe(server_id="Select a server to remove")
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def remove_server(self, ctx, server_id: str):
         """Remove a server from tracking"""
         
@@ -433,6 +500,7 @@ class Setup(commands.Cog):
         economy_channel="Channel for economy notifications (premium tier 2+)",
         voice_status_channel="Voice channel to update with player count"
     )
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def setup_channels(self, ctx, 
                             server_id: str,
                             killfeed_channel: discord.TextChannel = None,
@@ -752,6 +820,7 @@ class Setup(commands.Cog):
     
     @setup.command(name="historicalparse", description="Parse all historical data for a server")
     @app_commands.describe(server_id="Select a server to parse historical data for")
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def historical_parse(self, ctx, server_id: str):
         """Parse all historical data for a server"""
         
