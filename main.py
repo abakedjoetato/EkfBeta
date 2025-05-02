@@ -1,12 +1,26 @@
 """
 Powered By Discord.gg/EmeraldServers Discord Bot
 Main entry point for the application
+
+This file serves dual purposes:
+1. Running the Discord bot (primary function)
+2. Providing an app for the web server workflow (compatibility)
 """
 import asyncio
 import logging
 import os
 from dotenv import load_dotenv
 from bot import initialize_bot
+
+# Import app for web server workflow compatibility
+try:
+    from app import app
+except ImportError:
+    # Create a dummy app if the import fails
+    class DummyApp:
+        def __init__(self):
+            pass
+    app = DummyApp()
 
 # Load environment variables from .env file
 load_dotenv()

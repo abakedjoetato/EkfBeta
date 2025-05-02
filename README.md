@@ -59,6 +59,48 @@ The bot will use the environment variables set in Railway. Make sure all require
 
 Monitor your bot's logs and performance in the Railway dashboard to ensure it's functioning correctly.
 
+## Maintenance Tools
+
+This bot includes maintenance utilities to help with troubleshooting and management:
+
+### Restart Script
+
+If you need to manually restart the bot, use:
+
+```bash
+./restart_bot.sh
+```
+
+This will terminate the current bot process and allow the workflow system to restart it automatically.
+
+### Maintenance Utility
+
+The `maintenance.py` script provides various utilities for maintaining and troubleshooting the bot:
+
+```bash
+# Show available commands
+python maintenance.py help
+
+# Restart the bot
+python maintenance.py restart
+
+# List all configured servers
+python maintenance.py list_servers
+
+# Run diagnostics on the database
+python maintenance.py diagnose
+
+# Fix type inconsistencies in the database
+python maintenance.py fix_types
+
+# Clear error states in the database
+python maintenance.py clear_errors
+```
+
+### Type Handling
+
+All channel IDs are stored as integers in the database and explicitly converted to integers before being used with Discord's API. This ensures consistent behavior across the application.
+
 ---
 
 Powered By Discord.gg/EmeraldServers
