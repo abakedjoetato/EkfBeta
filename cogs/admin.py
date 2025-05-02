@@ -223,6 +223,13 @@ class Admin(commands.Cog):
     async def sethomeguild(self, ctx):
         """Set the current guild as the home guild (Bot Owner only)"""
         
+        # First, defer the response to avoid timeouts
+        if hasattr(ctx, 'interaction') and ctx.interaction:
+            await ctx.interaction.response.defer(ephemeral=False)
+            is_deferred = True
+        else:
+            is_deferred = False
+            
         try:
             # Get guild model for themed embed
             guild_data = None
@@ -240,7 +247,11 @@ class Admin(commands.Cog):
                     "Permission Denied",
                     "Only the bot owner can use this command."
                 , guild=guild_model)
-                await ctx.send(embed=embed, ephemeral=True)
+                
+                if is_deferred and hasattr(ctx.interaction, 'followup'):
+                    await ctx.interaction.followup.send(embed=embed, ephemeral=True)
+                else:
+                    await ctx.send(embed=embed, ephemeral=True)
                 return
             
             # Set home guild
@@ -254,8 +265,12 @@ class Admin(commands.Cog):
                 "Home Guild Set",
                 f"This guild ({ctx.guild.name}) has been set as the home guild for the bot."
             , guild=guild_model)
-            await ctx.send(embed=embed)
             
+            if is_deferred and hasattr(ctx.interaction, 'followup'):
+                await ctx.interaction.followup.send(embed=embed)
+            else:
+                await ctx.send(embed=embed)
+                
             logger.info(f"Home guild set to {ctx.guild.name} (ID: {ctx.guild.id}) by owner")
             
         except Exception as e:
@@ -264,7 +279,11 @@ class Admin(commands.Cog):
                 "Error",
                 f"An error occurred while setting the home guild: {e}"
             , guild=guild_model)
-            await ctx.send(embed=embed)
+            
+            if is_deferred and hasattr(ctx.interaction, 'followup'):
+                await ctx.interaction.followup.send(embed=embed)
+            else:
+                await ctx.send(embed=embed)
             
 
     

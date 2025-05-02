@@ -175,6 +175,9 @@ class Help(commands.Cog):
     async def commands(self, interaction: discord.Interaction):
         """Displays a comprehensive help system with all available commands"""
         
+        # Defer the response to avoid timeout
+        await interaction.response.defer(ephemeral=False, thinking=True)
+        
         # Get the guild model for theme
         guild_model = await Guild.get_by_id(self.bot.db, interaction.guild.id)
         
@@ -204,7 +207,7 @@ class Help(commands.Cog):
         
         # Create and send view with dropdown
         view = CommandsView(self.bot, interaction.user.id, interaction.guild.id)
-        await interaction.response.send_message(embed=embed, view=view)
+        await interaction.followup.send(embed=embed, view=view)
 
 
 async def setup(bot):
