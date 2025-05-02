@@ -888,17 +888,19 @@ class Setup(commands.Cog):
                 total_file_size += size
                 
             # Create progress embed function for reuse
-            async def update_progress(current_size, current_files, kills, estimated=None):
+            async def update_progress(current_size, current_files, kills, lines_processed=0, estimated=None):
                 elapsed = (datetime.now() - start_time).total_seconds()
                 progress_pct = min(99.9, (current_size / max(1, total_file_size)) * 100) if total_file_size > 0 else 0
                 
-                # Calculate rate and ETA
+                # Calculate rates and ETA
                 kill_rate = kills / max(1, elapsed) * 60  # kills per minute
+                line_rate = lines_processed / max(1, elapsed) * 60  # lines per minute
                 
                 status_lines = [
                     f"Files: {current_files}/{len(csv_files)} ({progress_pct:.1f}%)",
+                    f"Lines processed: {lines_processed:,} lines",
                     f"Events: {kills:,} kill events processed",
-                    f"Rate: {kill_rate:.1f} events per minute"
+                    f"Rate: {kill_rate:.1f} events/min, {line_rate:.1f} lines/min"
                 ]
                 
                 if estimated:
@@ -909,7 +911,7 @@ class Setup(commands.Cog):
                     "\n".join(status_lines),
                     progress=current_size,
                     total=total_file_size
-                )
+                , guild=guild_model)
                 await message.edit(embed=embed)
             
             current_size = 0
@@ -921,7 +923,7 @@ class Setup(commands.Cog):
                 
                 # Update initial progress
                 if i == 0 or (datetime.now() - last_progress_update).total_seconds() > 15:
-                    await update_progress(current_size, processed_files, total_kills)
+                    await update_progress(current_size, processed_files, total_kills, lines_processed=total_lines)
                     last_progress_update = datetime.now()
                 
                 # Read file in chunks
@@ -980,7 +982,8 @@ class Setup(commands.Cog):
                         else:
                             eta_str = "calculating..."
                         
-                        await update_progress(current_size, processed_files, total_kills, eta_str)
+                        # Update progress with ETA
+                        await update_progress(current_size, processed_files, total_kills, lines_processed=total_lines, estimated=eta_str)
                         last_progress_update = datetime.now()
                 
                 # Process any remaining events in the batch
@@ -1000,13 +1003,18 @@ class Setup(commands.Cog):
                 processed_files += 1
                 
                 # Update progress after each file
-                await update_progress(current_size, processed_files, total_kills)
+                await update_progress(current_size, processed_files, total_kills, lines_processed=total_lines)
                 last_progress_update = datetime.now()
             
             # Final update
+            elapsed_time = (datetime.now() - start_time).total_seconds()
+            elapsed_min = int(elapsed_time // 60)
+            elapsed_sec = int(elapsed_time % 60)
+            
             embed = EmbedBuilder.create_success_embed(
                 "Historical Parse Complete",
-                f"Successfully parsed {len(csv_files)} CSV file(s) and processed {total_kills} kill events."
+                f"Successfully parsed {len(csv_files)} CSV file(s) with {total_lines:,} lines and processed {total_kills:,} kill events.\n\n" +
+                f"Elapsed time: {elapsed_min}m {elapsed_sec}s"
             , guild=guild_model)
             await message.edit(embed=embed)
             

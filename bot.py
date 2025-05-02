@@ -139,7 +139,8 @@ async def load_extensions(bot):
         "cogs.events",
         "cogs.setup",
         "cogs.premium",
-        "cogs.economy"
+        "cogs.economy",
+        "cogs.help"  # New help cog for comprehensive command documentation
     ]
     
     for extension in extensions:
