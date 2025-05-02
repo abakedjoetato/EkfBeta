@@ -12,6 +12,7 @@ from models.server import Server
 from models.player import Player
 from models.guild import Guild
 from utils.embed_builder import EmbedBuilder
+from config import EMBED_COLOR, EMBED_FOOTER
 from utils.helpers import paginate_embeds, format_time_ago
 
 logger = logging.getLogger(__name__)
@@ -230,37 +231,153 @@ class Stats(commands.Cog):
             # Get detailed player stats
             player_stats = await player.get_detailed_stats()
             
-            # Create embed
-            embed = EmbedBuilder.create_stats_embed(player_stats, server_name)
+            # Create multiple embeds for different aspects of player stats
+            embeds = []
+            
+            # Primary stats embed
+            primary_embed = EmbedBuilder.create_stats_embed(player_stats, server_name)
+            
+            # Add core statistics
+            kills = player_stats.get("kills", 0)
+            deaths = player_stats.get("deaths", 0)
+            kdr = player_stats.get("kdr", 0)
+            suicides = player_stats.get("suicides", 0)
+            longest_shot = player_stats.get("longest_shot", 0)
+            
+            primary_embed.add_field(name="Kills", value=str(kills), inline=True)
+            primary_embed.add_field(name="Deaths", value=str(deaths), inline=True)
+            primary_embed.add_field(name="K/D Ratio", value=str(kdr), inline=True)
+            primary_embed.add_field(name="Suicides", value=str(suicides), inline=True)
+            primary_embed.add_field(name="Longest Shot", value=f"{longest_shot}m", inline=True)
+            
+            # Add streak information
+            highest_killstreak = player_stats.get("highest_killstreak", 0)
+            highest_deathstreak = player_stats.get("highest_deathstreak", 0)
+            current_streak = player_stats.get("current_streak", 0)
+            streak_desc = "On killing spree!" if current_streak > 0 else "Death streak" if current_streak < 0 else "Neutral"
+            
+            primary_embed.add_field(
+                name="Streaks", 
+                value=f"Best Killstreak: {highest_killstreak}\nWorst Deathstreak: {highest_deathstreak}\nCurrent: {abs(current_streak)} ({streak_desc})", 
+                inline=False
+            )
+            
+            # Add activity information
+            first_seen = player_stats.get("first_seen", "Unknown")
+            last_seen = player_stats.get("last_seen", "Unknown")
+            
+            # Convert ISO format strings to datetime objects
+            try:
+                first_seen_dt = datetime.fromisoformat(first_seen)
+                first_seen_str = first_seen_dt.strftime("%Y-%m-%d %H:%M")
+            except:
+                first_seen_str = "Unknown"
+                
+            try:
+                last_seen_dt = datetime.fromisoformat(last_seen)
+                last_seen_str = last_seen_dt.strftime("%Y-%m-%d %H:%M")
+            except:
+                last_seen_str = "Unknown"
+            
+            # Add activity info as a field
+            primary_embed.add_field(
+                name="Activity",
+                value=f"First Seen: {first_seen_str}\nLast Seen: {last_seen_str}",
+                inline=False
+            )
+            
+            # Add primary embed to list
+            embeds.append(primary_embed)
+            
+            # Weapons analysis embed
+            weapons_embed = discord.Embed(
+                title=f"🔫 Weapon Analysis: {player_stats['player_name']}",
+                description=f"Detailed weapon statistics for {player_stats['player_name']}",
+                color=EMBED_COLOR,
+                timestamp=datetime.utcnow()
+            )
+            weapons_embed.set_footer(text=EMBED_FOOTER)
             
             # Add combat statistics
             combat_kills = player_stats.get("combat_kills", 0)
-            embed.add_field(
-                name="Combat Stats", 
-                value=f"Combat Kills: {combat_kills}\nMelee Kills: {player_stats.get('melee_percentage', 0)}%", 
-                inline=True
+            melee_percentage = player_stats.get("melee_percentage", 0)
+            most_used_category = player_stats.get("most_used_category", {})
+            
+            weapon_style = ""
+            if most_used_category and "name" in most_used_category:
+                category_name = most_used_category["name"]
+                if category_name == "sniper_rifles":
+                    weapon_style = "Sniper"
+                elif category_name == "shotguns":
+                    weapon_style = "Close Combat Specialist"
+                elif category_name == "assault_rifles":
+                    weapon_style = "Assault Specialist"
+                elif category_name == "smgs":
+                    weapon_style = "Run & Gun"
+                elif category_name == "pistols":
+                    weapon_style = "Sidearm Expert"
+                elif category_name == "melee":
+                    weapon_style = "Silent Hunter"
+            
+            weapons_embed.add_field(
+                name="Combat Profile",
+                value=f"Combat Kills: {combat_kills}\nMelee Kills: {melee_percentage}%\nCombat Style: {weapon_style or 'Balanced'}",
+                inline=False
             )
             
             # Add weapon category breakdown
             weapon_categories = player_stats.get("weapon_categories", {})
             if weapon_categories:
-                # Format categories
-                category_str = "\n".join([f"{category.title()}: {count} kills" 
-                                       for category, count in weapon_categories.items()])
-                embed.add_field(name="Weapon Categories", value=category_str, inline=True)
+                # Format categories with percentages
+                if combat_kills > 0:
+                    category_lines = []
+                    for category, count in weapon_categories.items():
+                        if category not in ['special', 'death_types', 'unknown']:
+                            percentage = round((count / combat_kills) * 100, 1)
+                            display_name = category.replace('_', ' ').title()
+                            category_lines.append(f"{display_name}: {count} kills ({percentage}%)")
+                    
+                    category_str = "\n".join(category_lines)
+                    weapons_embed.add_field(name="Weapon Categories", value=category_str, inline=False)
             
             # Add weapon stats if available
             weapons = player_stats.get("weapons", {})
             if weapons:
-                # Get top 3 weapons
-                sorted_weapons = sorted(weapons.items(), key=lambda x: x[1], reverse=True)[:3]
-                weapon_str = "\n".join([f"{weapon}: {count} kills" for weapon, count in sorted_weapons])
-                embed.add_field(name="Top Weapons", value=weapon_str, inline=False)
+                # Get top 5 weapons
+                sorted_weapons = sorted(weapons.items(), key=lambda x: x[1], reverse=True)[:5]
+                weapon_lines = []
+                
+                # Add weapon details from weapon database
+                from utils.weapon_stats import get_weapon_details
+                
+                for weapon, count in sorted_weapons:
+                    details = get_weapon_details(weapon)
+                    if details and "type" in details:
+                        weapon_type = details.get("type", "Unknown")
+                        ammo = details.get("ammo", "N/A")
+                        weapon_lines.append(f"{weapon} ({weapon_type}): {count} kills | {ammo}")
+                    else:
+                        weapon_lines.append(f"{weapon}: {count} kills")
+                
+                weapon_str = "\n".join(weapon_lines)
+                weapons_embed.add_field(name="Top Weapons", value=weapon_str, inline=False)
             
-            # Add victim and nemesis info (only show player names, no IDs)
+            # Add weapons embed to list
+            embeds.append(weapons_embed)
+            
+            # Player matchups embed
+            matchups_embed = discord.Embed(
+                title=f"⚔️ Player Matchups: {player_stats['player_name']}",
+                description=f"Player vs. player statistics for {player_stats['player_name']}",
+                color=EMBED_COLOR,
+                timestamp=datetime.utcnow()
+            )
+            matchups_embed.set_footer(text=EMBED_FOOTER)
+            
+            # Add victim and nemesis info
             favorite_victim = player_stats.get("favorite_victim")
             if favorite_victim:
-                embed.add_field(
+                matchups_embed.add_field(
                     name="Favorite Victim",
                     value=f"{favorite_victim['player_name']} ({favorite_victim['kill_count']} kills)",
                     inline=True
@@ -268,14 +385,206 @@ class Stats(commands.Cog):
             
             nemesis = player_stats.get("nemesis")
             if nemesis:
-                embed.add_field(
+                matchups_embed.add_field(
                     name="Nemesis",
                     value=f"{nemesis['player_name']} ({nemesis['kill_count']} kills)",
                     inline=True
                 )
             
-            # Send the embed
-            await ctx.send(embed=embed)
+            # Get recent kill data for this player from kills collection
+            pipeline = [
+                {
+                    "$match": {
+                        "server_id": server_id,
+                        "$or": [
+                            {"killer_id": player.id},
+                            {"victim_id": player.id}
+                        ],
+                        "is_suicide": False
+                    }
+                },
+                {
+                    "$sort": {"timestamp": -1}
+                },
+                {
+                    "$limit": 50
+                }
+            ]
+            
+            cursor = self.bot.db.kills.aggregate(pipeline)
+            recent_kills = await cursor.to_list(length=None)
+            
+            # Analyze recent performance
+            if recent_kills:
+                # Count recent kills and deaths
+                recent_kills_count = sum(1 for k in recent_kills if k.get("killer_id") == player.id)
+                recent_deaths_count = sum(1 for k in recent_kills if k.get("victim_id") == player.id)
+                recent_kdr = round(recent_kills_count / max(recent_deaths_count, 1), 2)
+                
+                performance_trend = "Improving" if recent_kdr > kdr else "Declining" if recent_kdr < kdr else "Stable"
+                
+                matchups_embed.add_field(
+                    name="Recent Performance",
+                    value=f"Recent K/D: {recent_kdr}\nOverall K/D: {kdr}\nTrend: {performance_trend}",
+                    inline=False
+                )
+                
+                # Find common opponents in recent kills
+                opponents = {}
+                for kill in recent_kills:
+                    if kill.get("killer_id") == player.id:
+                        # Player killed someone
+                        victim_id = kill.get("victim_id")
+                        victim_name = kill.get("victim_name")
+                        if victim_id not in opponents:
+                            opponents[victim_id] = {"name": victim_name, "kills": 0, "deaths": 0}
+                        opponents[victim_id]["kills"] += 1
+                    elif kill.get("victim_id") == player.id:
+                        # Player was killed by someone
+                        killer_id = kill.get("killer_id")
+                        killer_name = kill.get("killer_name")
+                        if killer_id not in opponents:
+                            opponents[killer_id] = {"name": killer_name, "kills": 0, "deaths": 0}
+                        opponents[killer_id]["deaths"] += 1
+                
+                # Find top matchups
+                top_matchups = sorted(
+                    [(opp_id, data) for opp_id, data in opponents.items() if data["kills"] + data["deaths"] >= 3],
+                    key=lambda x: x[1]["kills"] + x[1]["deaths"],
+                    reverse=True
+                )[:5]
+                
+                if top_matchups:
+                    matchup_lines = []
+                    for _, data in top_matchups:
+                        name = data["name"]
+                        kills = data["kills"]
+                        deaths = data["deaths"]
+                        matchup_kdr = round(kills / max(deaths, 1), 2)
+                        matchup_lines.append(f"{name}: {kills}K/{deaths}D (KDR: {matchup_kdr})")
+                    
+                    matchups_embed.add_field(
+                        name="Recent Matchups",
+                        value="\n".join(matchup_lines),
+                        inline=False
+                    )
+            
+            # Add matchups embed to list
+            embeds.append(matchups_embed)
+            
+            # Get historical kills for this player to analyze trends
+            pipeline = [
+                {
+                    "$match": {
+                        "server_id": server_id,
+                        "killer_id": player.id,
+                        "is_suicide": False
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": {
+                            "$dateToString": {"format": "%Y-%m-%d", "date": "$timestamp"}
+                        },
+                        "kills": {"$sum": 1},
+                        "avg_distance": {"$avg": "$distance"}
+                    }
+                },
+                {
+                    "$sort": {"_id": 1}
+                },
+                {
+                    "$limit": 30
+                }
+            ]
+            
+            cursor = self.bot.db.kills.aggregate(pipeline)
+            historical_kills = await cursor.to_list(length=None)
+            
+            # Create a performance history embed if we have data
+            if len(historical_kills) > 2:
+                history_embed = discord.Embed(
+                    title=f"📈 Performance History: {player_stats['player_name']}",
+                    description=f"Historical performance data for {player_stats['player_name']}",
+                    color=EMBED_COLOR,
+                    timestamp=datetime.utcnow()
+                )
+                history_embed.set_footer(text=EMBED_FOOTER)
+                
+                # Format historical kill data
+                kill_dates = [h["_id"] for h in historical_kills[-7:]]
+                kill_counts = [h["kills"] for h in historical_kills[-7:]]
+                
+                history_embed.add_field(
+                    name="Recent Daily Performance",
+                    value="```Date       | Kills\n" + 
+                          "------------+-------\n" + 
+                          "\n".join([f"{date} | {kills}" for date, kills in zip(kill_dates, kill_counts)]) + 
+                          "```",
+                    inline=False
+                )
+                
+                # Calculate performance improvement
+                if len(historical_kills) >= 3:
+                    recent_avg = sum(h["kills"] for h in historical_kills[-3:]) / 3
+                    older_avg = sum(h["kills"] for h in historical_kills[-6:-3]) / 3 if len(historical_kills) >= 6 else 0
+                    
+                    if older_avg > 0:
+                        change_pct = round(((recent_avg - older_avg) / older_avg) * 100, 1)
+                        trend_text = f"{change_pct}% {'increase' if change_pct >= 0 else 'decrease'} in kills"
+                    else:
+                        trend_text = "Insufficient historical data"
+                    
+                    history_embed.add_field(
+                        name="Performance Trend",
+                        value=f"Recent average: {round(recent_avg, 1)} kills/day\n" + 
+                              (f"Previous average: {round(older_avg, 1)} kills/day\n" if older_avg > 0 else "") + 
+                              trend_text,
+                        inline=False
+                    )
+                
+                # Add history embed to list
+                embeds.append(history_embed)
+            
+            # Create pagination view for embeds
+            from utils.helpers import create_pagination_buttons, paginate_embeds
+            current_embed, view = paginate_embeds(embeds)
+            
+            # Send the embed with pagination
+            message = await ctx.send(embed=current_embed, view=view)
+            
+            # Set up pagination callback
+            async def pagination_callback(interaction):
+                # Get current page from the pagination indicator label
+                current_page = 0
+                for item in view.children:
+                    if item.custom_id == "pagination_indicator":
+                        try:
+                            # Extract current page from "Page X/Y" format
+                            page_text = item.label
+                            current_page = int(page_text.split('/')[0].replace('Page ', '')) - 1
+                        except (ValueError, IndexError):
+                            current_page = 0
+                        break
+                
+                if interaction.data["custom_id"] == "pagination_first":
+                    new_page = 0
+                elif interaction.data["custom_id"] == "pagination_prev":
+                    new_page = max(0, current_page - 1)
+                elif interaction.data["custom_id"] == "pagination_next":
+                    new_page = min(len(embeds) - 1, current_page + 1)
+                elif interaction.data["custom_id"] == "pagination_last":
+                    new_page = len(embeds) - 1
+                else:
+                    return
+                
+                new_embed, updated_view = paginate_embeds(embeds, new_page)
+                await interaction.response.edit_message(embed=new_embed, view=updated_view)
+            
+            # Set the callback for each button
+            for item in view.children:
+                if hasattr(item, "custom_id") and item.custom_id.startswith("pagination_"):
+                    item.callback = pagination_callback
             
         except Exception as e:
             logger.error(f"Error getting player stats: {e}", exc_info=True)
