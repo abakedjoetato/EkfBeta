@@ -719,6 +719,8 @@ class Stats(commands.Cog):
         """View leaderboards for a specific stat"""
         
         try:
+            # Defer response to prevent timeout
+            await ctx.defer()
             # Get guild model for themed embed
             guild_data = None
             guild_model = None
