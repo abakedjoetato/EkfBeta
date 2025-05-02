@@ -1031,6 +1031,14 @@ class Setup(commands.Cog):
                     # Parse lines
                     kill_events = CSVParser.parse_kill_lines(lines)
                     
+                    # Log details about parsed events
+                    if len(kill_events) > 0:
+                        logger.info(f"Successfully parsed {len(kill_events)} kill events from chunk of {len(lines)} lines")
+                    else:
+                        # Log a sample of lines for debugging if no events were parsed
+                        sample_lines = lines[:3] if len(lines) > 3 else lines
+                        logger.warning(f"No kill events parsed from chunk of {len(lines)} lines. Sample: {sample_lines}")
+                    
                     # Process kill events
                     for kill_event in kill_events:
                         # Add server ID
