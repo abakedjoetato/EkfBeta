@@ -1,5 +1,5 @@
 """
-Tower of Temptation PvP Statistics Discord Bot
+Powered By Discord.gg/EmeraldServers Discord Bot
 Main entry point for the application
 """
 import asyncio

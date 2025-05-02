@@ -158,32 +158,32 @@ EVENT_PATTERNS = {
 EMBED_THEMES = {
     "default": {
         "color": 0x50C878,  # Emerald green
-        "footer": "Tower of Temptation PvP Statistics",
+        "footer": "Powered By Discord.gg/EmeraldServers",
         "name": "Default"
     },
     "midnight": {
         "color": 0x2C3E50,  # Dark blue/slate
-        "footer": "Tower of Temptation PvP Statistics | Midnight Theme",
+        "footer": "Powered By Discord.gg/EmeraldServers | Midnight Theme",
         "name": "Midnight"
     },
     "blood": {
         "color": 0x8B0000,  # Dark red
-        "footer": "Tower of Temptation PvP Statistics | Blood Theme",
+        "footer": "Powered By Discord.gg/EmeraldServers | Blood Theme",
         "name": "Blood"
     },
     "gold": {
         "color": 0xFFD700,  # Gold
-        "footer": "Tower of Temptation PvP Statistics | Gold Theme",
+        "footer": "Powered By Discord.gg/EmeraldServers | Gold Theme",
         "name": "Gold"
     },
     "toxic": {
         "color": 0x39FF14,  # Neon green
-        "footer": "Tower of Temptation PvP Statistics | Toxic Theme",
+        "footer": "Powered By Discord.gg/EmeraldServers | Toxic Theme",
         "name": "Toxic"
     },
     "ghost": {
         "color": 0xE0E0E0,  # Light gray
-        "footer": "Tower of Temptation PvP Statistics | Ghost Theme",
+        "footer": "Powered By Discord.gg/EmeraldServers | Ghost Theme",
         "name": "Ghost"
     }
 }

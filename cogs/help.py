@@ -183,7 +183,7 @@ class Help(commands.Cog):
         
         # Create initial embed
         embed = EmbedBuilder.create_base_embed(
-            title="Tower of Temptation Commands",
+            title="Powered By Discord.gg/EmeraldServers",
             description="Use the dropdown menu below to navigate through different command categories.",
             guild=guild_model
         )
