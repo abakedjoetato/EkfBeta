@@ -322,9 +322,12 @@ class Player:
         # Get favorite weapon
         favorite_weapon = await self.get_favorite_weapon()
         
-        # Compile stats
+        # Get advanced weapon stats
+        from utils.weapon_stats import analyze_player_weapon_stats
+        weapon_analysis = analyze_player_weapon_stats(self.weapons)
+        
+        # Compile stats (exclude player_id from being shown in UI)
         stats = {
-            "player_id": self.id,
             "player_name": self.name,
             "server_id": self.server_id,
             "kills": self.kills,
@@ -338,6 +341,11 @@ class Player:
             "nemesis": nemesis,
             "favorite_victim": favorite_victim,
             "favorite_weapon": favorite_weapon,
+            "weapon_categories": weapon_analysis.get("category_breakdown", {}),
+            "most_used_category": weapon_analysis.get("most_used_category"),
+            "melee_percentage": weapon_analysis.get("melee_percentage", 0),
+            "combat_kills": weapon_analysis.get("combat_kills", 0),
+            "weapons": self.weapons,  # Keep all weapon data for detailed stats
             "first_seen": self.first_seen,
             "last_seen": self.last_seen
         }

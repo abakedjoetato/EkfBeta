@@ -31,12 +31,12 @@ class Server:
         self.updated_at = server_data.get("updated_at")
     
     @classmethod
-    async def get_by_id(cls, db, server_id: str, guild_id: int = None) -> Optional['Server']:
+    async def get_by_id(cls, db, server_id: str, guild_id: Optional[int] = None) -> Optional['Server']:
         """Get a server by ID"""
         # Build query
         query = {"server_id": server_id}
         if guild_id:
-            query["guild_id"] = guild_id
+            query["guild_id"] = str(guild_id)  # Convert to string to avoid type issues
         
         # Find server in guild collection
         guild_data = await db.guilds.find_one({
@@ -71,7 +71,7 @@ class Server:
         
         # Add server to guild
         await db.guilds.update_one(
-            {"guild_id": server_data["guild_id"]},
+            {"guild_id": str(server_data["guild_id"])},
             {"$push": {"servers": server_data}}
         )
         
@@ -85,7 +85,7 @@ class Server:
         # Update specific fields in the server document within the guild
         result = await self.db.guilds.update_one(
             {
-                "guild_id": self.guild_id,
+                "guild_id": str(self.guild_id),
                 "servers.server_id": self.id
             },
             {"$set": {f"servers.$.{key}": value for key, value in update_data.items()}}
@@ -104,7 +104,7 @@ class Server:
         """Delete the server"""
         # Remove server from guild
         result = await self.db.guilds.update_one(
-            {"guild_id": self.guild_id},
+            {"guild_id": str(self.guild_id)},
             {"$pull": {"servers": {"server_id": self.id}}}
         )
         
@@ -212,8 +212,16 @@ class Server:
         """Get the count of events for this server"""
         return await self.db.events.count_documents({"server_id": self.id})
     
-    async def get_top_weapons(self, limit: int = 5) -> List[Dict[str, Any]]:
-        """Get the top weapons by kill count"""
+    async def get_top_weapons(self, limit: int = 5, include_details: bool = False) -> List[Dict[str, Any]]:
+        """Get the top weapons by kill count
+        
+        Args:
+            limit: Maximum number of weapons to return
+            include_details: Whether to include detailed weapon information
+            
+        Returns:
+            List of weapon dictionaries with kill counts and optionally details
+        """
         pipeline = [
             {
                 "$match": {
@@ -238,7 +246,32 @@ class Server:
         cursor = self.db.kills.aggregate(pipeline)
         weapons = await cursor.to_list(length=None)
         
-        return [{"weapon": w["_id"], "kills": w["count"]} for w in weapons]
+        if not include_details:
+            return [{"weapon": w["_id"], "kills": w["count"]} for w in weapons]
+            
+        # Import the weapon details function
+        from utils.weapon_stats import get_weapon_details
+        
+        # Include detailed weapon information
+        result = []
+        for w in weapons:
+            weapon_name = w["_id"]
+            weapon_data = {
+                "weapon": weapon_name,
+                "kills": w["count"]
+            }
+            
+            # Add detailed information if available
+            details = get_weapon_details(weapon_name)
+            if details:
+                weapon_data["category"] = details.get("category")
+                weapon_data["type"] = details.get("type")
+                weapon_data["ammo"] = details.get("ammo")
+                weapon_data["description"] = details.get("description")
+                
+            result.append(weapon_data)
+            
+        return result
     
     async def get_top_killers(self, limit: int = 5) -> List[Dict[str, Any]]:
         """Get the top killers by kill count"""
@@ -267,7 +300,8 @@ class Server:
         cursor = self.db.kills.aggregate(pipeline)
         killers = await cursor.to_list(length=None)
         
-        return [{"player_id": k["_id"], "player_name": k["name"], "kills": k["kills"]} for k in killers]
+        # Return only player names, not IDs, for security
+        return [{"player_name": k["name"], "kills": k["kills"]} for k in killers]
     
     async def get_server_stats(self) -> Dict[str, Any]:
         """Get comprehensive stats for this server"""
@@ -277,8 +311,8 @@ class Server:
         player_count = await self.get_player_count()
         online_count, _ = await self.get_online_player_count()
         
-        # Get top weapons
-        top_weapons = await self.get_top_weapons()
+        # Get top weapons with detailed information
+        top_weapons = await self.get_top_weapons(include_details=True)
         
         # Get top killers
         top_killers = await self.get_top_killers()
@@ -289,7 +323,22 @@ class Server:
             sort=[("timestamp", -1)],
             limit=5
         )
-        recent_events = await recent_events_cursor.to_list(length=None)
+        raw_events = await recent_events_cursor.to_list(length=None)
+        
+        # Filter out sensitive information like player IDs
+        recent_events = []
+        for event in raw_events:
+            # Create a safe copy without IDs
+            safe_event = {
+                "event_type": event.get("event_type"),
+                "timestamp": event.get("timestamp"),
+                "details": event.get("details", [])
+            }
+            # If player names are present, include them without IDs
+            if "player_name" in event:
+                safe_event["player_name"] = event["player_name"]
+            # Add the safe event to our list
+            recent_events.append(safe_event)
         
         # Compile stats
         stats = {

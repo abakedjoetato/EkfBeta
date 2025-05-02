@@ -233,6 +233,22 @@ class Stats(commands.Cog):
             # Create embed
             embed = EmbedBuilder.create_stats_embed(player_stats, server_name)
             
+            # Add combat statistics
+            combat_kills = player_stats.get("combat_kills", 0)
+            embed.add_field(
+                name="Combat Stats", 
+                value=f"Combat Kills: {combat_kills}\nMelee Kills: {player_stats.get('melee_percentage', 0)}%", 
+                inline=True
+            )
+            
+            # Add weapon category breakdown
+            weapon_categories = player_stats.get("weapon_categories", {})
+            if weapon_categories:
+                # Format categories
+                category_str = "\n".join([f"{category.title()}: {count} kills" 
+                                       for category, count in weapon_categories.items()])
+                embed.add_field(name="Weapon Categories", value=category_str, inline=True)
+            
             # Add weapon stats if available
             weapons = player_stats.get("weapons", {})
             if weapons:
@@ -241,7 +257,7 @@ class Stats(commands.Cog):
                 weapon_str = "\n".join([f"{weapon}: {count} kills" for weapon, count in sorted_weapons])
                 embed.add_field(name="Top Weapons", value=weapon_str, inline=False)
             
-            # Add victim and nemesis info
+            # Add victim and nemesis info (only show player names, no IDs)
             favorite_victim = player_stats.get("favorite_victim")
             if favorite_victim:
                 embed.add_field(
@@ -471,6 +487,140 @@ class Stats(commands.Cog):
         weapon_name="The weapon name to search for (partial match)"
     )
     @app_commands.autocomplete(server_id=server_id_autocomplete)
+    @stats.command(name="weapon_categories", description="View statistics by weapon category")
+    @app_commands.describe(
+        server_id="The server ID to check stats for"
+    )
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
+    async def weapon_categories(self, ctx, server_id: str):
+        """View statistics by weapon category"""
+        try:
+            # Get guild data
+            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+            if not guild_data:
+                embed = EmbedBuilder.create_error_embed(
+                    "Error",
+                    "This guild is not set up. Please use the setup commands first."
+                )
+                await ctx.send(embed=embed)
+                return
+            
+            # Check if the guild has access to stats feature
+            guild = Guild(self.bot.db, guild_data)
+            if not guild.check_feature_access("stats"):
+                embed = EmbedBuilder.create_error_embed(
+                    "Premium Feature",
+                    "Weapon category statistics is a premium feature. Please upgrade to access this feature."
+                )
+                await ctx.send(embed=embed)
+                return
+            
+            # Find the server
+            server = None
+            server_name = server_id
+            for s in guild_data.get("servers", []):
+                if s.get("server_id") == server_id:
+                    server = Server(self.bot.db, s)
+                    server_name = s.get("server_name", server_id)
+                    break
+                    
+            if not server:
+                embed = EmbedBuilder.create_error_embed(
+                    "Error",
+                    f"Server {server_id} not found. Please check your server ID."
+                )
+                await ctx.send(embed=embed)
+                return
+            
+            # Import weapon utilities
+            from utils.weapon_stats import get_weapon_category, WEAPON_CATEGORIES
+            
+            # Query all weapons used on this server
+            pipeline = [
+                {
+                    "$match": {
+                        "server_id": server_id,
+                        "is_suicide": False
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": "$weapon",
+                        "kills": {"$sum": 1}
+                    }
+                }
+            ]
+            
+            cursor = self.bot.db.kills.aggregate(pipeline)
+            weapons = await cursor.to_list(length=None)
+            
+            if not weapons:
+                embed = EmbedBuilder.create_error_embed(
+                    "No Data",
+                    f"No weapon data found for server {server_name}."
+                )
+                await ctx.send(embed=embed)
+                return
+                
+            # Compile category stats
+            category_stats = {}
+            total_kills = 0
+            
+            for weapon in weapons:
+                weapon_name = weapon["_id"]
+                kill_count = weapon["kills"]
+                total_kills += kill_count
+                
+                category = get_weapon_category(weapon_name)
+                if category not in category_stats:
+                    category_stats[category] = 0
+                category_stats[category] += kill_count
+            
+            # Create embed
+            embed = EmbedBuilder.create_base_embed(
+                f"📊 Weapon Category Stats",
+                f"Weapon category breakdown on {server_name}"
+            )
+            
+            # Add total kills
+            embed.add_field(name="Total Kills", value=str(total_kills), inline=False)
+            
+            # Add category stats
+            for category, kills in sorted(category_stats.items(), key=lambda x: x[1], reverse=True):
+                if category == "unknown" or category == "death_types":
+                    continue
+                    
+                percentage = round((kills / total_kills) * 100, 1)
+                embed.add_field(
+                    name=category.replace("_", " ").title(),
+                    value=f"{kills} kills ({percentage}%)",
+                    inline=True
+                )
+            
+            # Add definitions section
+            definitions = []
+            for category in category_stats.keys():
+                if category in WEAPON_CATEGORIES and category not in ["death_types", "unknown"]:
+                    weapons_list = WEAPON_CATEGORIES[category]
+                    if len(weapons_list) > 3:
+                        weapons_str = ", ".join(weapons_list[:3]) + f" and {len(weapons_list)-3} more"
+                    else:
+                        weapons_str = ", ".join(weapons_list)
+                    definitions.append(f"**{category.replace('_', ' ').title()}**: {weapons_str}")
+            
+            if definitions:
+                embed.add_field(name="Category Definitions", value="\n".join(definitions), inline=False)
+                
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error getting weapon category stats: {e}", exc_info=True)
+            embed = EmbedBuilder.create_error_embed(
+                "Error",
+                f"An error occurred while getting weapon category stats: {e}"
+            )
+            await ctx.send(embed=embed)
+            
     async def weapon_stats(self, ctx, server_id: str, weapon_name: str):
         """View statistics for a specific weapon"""
         try:
@@ -511,6 +661,9 @@ class Stats(commands.Cog):
                 await ctx.send(embed=embed)
                 return
             
+            # Import weapon utilities
+            from utils.weapon_stats import get_weapon_category, is_actual_weapon, get_weapon_details
+
             # Query kills for this weapon
             pipeline = [
                 {
@@ -526,6 +679,7 @@ class Stats(commands.Cog):
                         "kills": {"$sum": 1},
                         "avg_distance": {"$avg": "$distance"},
                         "max_distance": {"$max": "$distance"},
+                        "min_distance": {"$min": "$distance"},
                         "killers": {"$addToSet": "$killer_id"}
                     }
                 },
@@ -552,18 +706,21 @@ class Stats(commands.Cog):
             embeds = []
             
             for weapon in weapon_stats:
-                # Get top users of this weapon
+                weapon_name = weapon["_id"]
+                weapon_category = get_weapon_category(weapon_name)
+                
+                # Get top users of this weapon (only store names, no IDs)
                 top_users_pipeline = [
                     {
                         "$match": {
                             "server_id": server_id,
-                            "weapon": weapon["_id"],
+                            "weapon": weapon_name,
                             "is_suicide": False
                         }
                     },
                     {
                         "$group": {
-                            "_id": "$killer_id",
+                            "_id": {"$toLower": "$killer_name"},
                             "name": {"$first": "$killer_name"},
                             "kills": {"$sum": 1},
                             "avg_distance": {"$avg": "$distance"},
@@ -581,31 +738,51 @@ class Stats(commands.Cog):
                 top_users_cursor = self.bot.db.kills.aggregate(top_users_pipeline)
                 top_users = await top_users_cursor.to_list(length=None)
                 
-                # Create embed
+                # Get detailed weapon information
+                weapon_details = get_weapon_details(weapon_name)
+                
+                # Create embed with weapon category
                 embed = EmbedBuilder.create_base_embed(
-                    f"🔫 {weapon['_id']} Stats",
+                    f"🔫 {weapon_name} Stats",
                     f"Weapon statistics on {server_name}"
                 )
                 
                 # Add basic stats
+                embed.add_field(name="Weapon Type", value=weapon_details.get("type", weapon_category.title()), inline=True)
                 embed.add_field(name="Total Kills", value=str(weapon["kills"]), inline=True)
                 embed.add_field(name="Unique Users", value=str(len(weapon["killers"])), inline=True)
                 
+                # Add weapon details if available
+                if weapon_details.get("ammo"):
+                    embed.add_field(name="Ammunition", value=weapon_details["ammo"], inline=True)
+                if weapon_details.get("damage"):
+                    embed.add_field(name="Damage", value=str(weapon_details["damage"]), inline=True)
+                if weapon_details.get("effective_range"):
+                    embed.add_field(name="Effective Range", value=weapon_details["effective_range"], inline=True)
+                if weapon_details.get("fire_rate"):
+                    embed.add_field(name="Fire Rate", value=weapon_details["fire_rate"], inline=True)
+                
+                # Add weapon description if available
+                if weapon_details.get("description"):
+                    embed.add_field(name="Description", value=weapon_details["description"], inline=False)
+                
+                # Add distance statistics in one field
+                distance_info = []
                 if weapon.get("avg_distance"):
-                    embed.add_field(
-                        name="Avg. Distance", 
-                        value=f"{round(weapon['avg_distance'], 1)}m", 
-                        inline=True
-                    )
-                
+                    distance_info.append(f"Avg: {round(weapon['avg_distance'], 1)}m")
+                if weapon.get("min_distance"):
+                    distance_info.append(f"Min: {round(weapon['min_distance'], 1)}m")
                 if weapon.get("max_distance"):
+                    distance_info.append(f"Max: {round(weapon['max_distance'], 1)}m")
+                
+                if distance_info:
                     embed.add_field(
-                        name="Longest Kill", 
-                        value=f"{round(weapon['max_distance'], 1)}m", 
-                        inline=True
+                        name="Distance Stats", 
+                        value="\n".join(distance_info), 
+                        inline=False
                     )
                 
-                # Add top users
+                # Add top users (only show names, not IDs)
                 if top_users:
                     top_users_str = "\n".join([
                         f"{i+1}. **{user['name']}**: {user['kills']} kills" +
@@ -613,6 +790,21 @@ class Stats(commands.Cog):
                         for i, user in enumerate(top_users)
                     ])
                     embed.add_field(name="Top Users", value=top_users_str, inline=False)
+                
+                # Special note for non-weapon kills
+                if not is_actual_weapon(weapon_name):
+                    if weapon_name == "land_vehicle":
+                        embed.add_field(
+                            name="Special Note",
+                            value="Vehicle kills represent players killed by vehicles",
+                            inline=False
+                        )
+                    elif weapon_name in ["falling", "suicide_by_relocation"]:
+                        embed.add_field(
+                            name="Special Note",
+                            value="This represents a death type rather than an actual weapon",
+                            inline=False
+                        )
                 
                 embeds.append(embed)
             
