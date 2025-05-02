@@ -32,12 +32,13 @@ class Setup(commands.Cog):
         if ctx.invoked_subcommand is None:
             await ctx.send("Please specify a subcommand.")
     
-    @setup.command(name="addserver", description="Add a server to track")
+    @setup.command(name="addserver", description="Add a game server to track PvP stats")
     @app_commands.describe(
-        server_id="Unique ID for the server",
-        server_name="Name of the server",
-        sftp_url="SFTP connection string (sftp://username:password@host:port)"
+        server_id="Unique ID for the server (letters, numbers, underscores only)",
+        server_name="Friendly name to display for this server",
+        sftp_url="Connection string format: sftp://username:password@host:port"
     )
+    @app_commands.guild_only()
     async def add_server(self, ctx, server_id: str, server_name: str, sftp_url: str):
         """Add a new server to track"""
         try:
