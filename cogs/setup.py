@@ -45,6 +45,8 @@ class Setup(commands.Cog):
     async def add_server(self, ctx, server_name: str, host: str, port: int, username: str, password: str, server_id: str):
         """Add a new server to track"""
         try:
+            # Defer response to prevent timeout
+            await ctx.defer()
             # Get guild model for themed embed
             guild_data = None
             guild_model = None
@@ -275,7 +277,11 @@ class Setup(commands.Cog):
         """Remove a server from tracking"""
         
         try:
+            # Defer response to prevent timeout
+            await ctx.defer()
+            
             # Get guild model for themed embed
+
             guild_data = None
             guild_model = None
             try:
@@ -437,7 +443,11 @@ class Setup(commands.Cog):
         """Configure notification channels for a server"""
         
         try:
+            # Defer response to prevent timeout
+            await ctx.defer()
+            
             # Get guild model for themed embed
+
             guild_data = None
             guild_model = None
             try:
@@ -570,7 +580,11 @@ class Setup(commands.Cog):
         """List all configured servers for this guild"""
         
         try:
+            # Defer response to prevent timeout
+            await ctx.defer()
+            
             # Get guild model for themed embed
+            
             guild_data = None
             guild_model = None
             try:
@@ -742,6 +756,8 @@ class Setup(commands.Cog):
         """Parse all historical data for a server"""
         
         try:
+            # Defer response to prevent timeout
+            await ctx.defer()
             # Get guild model for themed embed
             guild_data = None
             guild_model = None

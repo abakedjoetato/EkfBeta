@@ -53,11 +53,11 @@ class Events(commands.Cog):
             
             # Basic commands
             basic_commands = [
-                "`/events start server_id:<id>` - Start monitoring events for a server",
-                "`/events stop server_id:<id>` - Stop monitoring events for a server",
+                "`/events start server:<name>` - Start monitoring events for a server",
+                "`/events stop server:<name>` - Stop monitoring events for a server",
                 "`/events status` - Check the status of all event monitors",
-                "`/events list server_id:<id> [event_type:all] [limit:10]` - List recent events",
-                "`/events online server_id:<id>` - List online players"
+                "`/events list server:<name> [event_type:all] [limit:10]` - List recent events",
+                "`/events online server:<name>` - List online players"
             ]
             
             embed.add_field(
@@ -68,11 +68,11 @@ class Events(commands.Cog):
             
             # Notification configuration commands
             config_commands = [
-                "`/events config server_id:<id> ...` - Configure game event notifications",
+                "`/events config server:<name> ...` - Configure game event notifications",
                 "  ↳ Set which game events (missions, airdrops, etc.) trigger notifications",
-                "`/events conn_config server_id:<id> ...` - Configure connection notifications",
+                "`/events conn_config server:<name> ...` - Configure connection notifications",
                 "  ↳ Enable/disable player connect and disconnect notifications",
-                "`/events suicide_config server_id:<id> ...` - Configure suicide notifications",
+                "`/events suicide_config server:<name> ...` - Configure suicide notifications",
                 "  ↳ Enable/disable different types of suicide notifications"
             ]
             
@@ -107,7 +107,7 @@ class Events(commands.Cog):
             await ctx.send(embed=embed)
     
     @events.command(name="start", description="Start monitoring events for a server")
-    @app_commands.describe(server_id="The ID of the server to monitor")
+    @app_commands.describe(server_id="Select a server to monitor")
     async def start(self, ctx, server_id: str):
         """Start the events monitor for a server"""
         
@@ -156,7 +156,7 @@ class Events(commands.Cog):
             if not server_exists:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
-                    f"Server with ID {server_id} not found in this guild."
+                    f"Server '{server_id}' not found in this guild."
                 , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
@@ -214,7 +214,7 @@ class Events(commands.Cog):
             await ctx.send(embed=embed)
     
     @events.command(name="stop", description="Stop monitoring events for a server")
-    @app_commands.describe(server_id="The ID of the server to stop monitoring")
+    @app_commands.describe(server_id="Select a server to stop monitoring")
     async def stop(self, ctx, server_id: str):
         """Stop the events monitor for a server"""
         
@@ -333,7 +333,7 @@ class Events(commands.Cog):
                 # Add instructions
                 embed.add_field(
                     name="How to Start",
-                    value="Use `/events start <server_id>` to start monitoring a server.",
+                    value="Use `/events start server:<server_name>` to start monitoring a server.",
                     inline=False
                 )
                 
@@ -358,7 +358,7 @@ class Events(commands.Cog):
     
     @events.command(name="list", description="List recent events for a server")
     @app_commands.describe(
-        server_id="The ID of the server to list events for",
+        server_id="Select a server to list events for",
         event_type="Filter events by type",
         limit="Number of events to show (max 20)"
     )
@@ -494,7 +494,7 @@ class Events(commands.Cog):
             await ctx.send(embed=embed)
     
     @events.command(name="players", description="List online players for a server")
-    @app_commands.describe(server_id="The ID of the server to list players for")
+    @app_commands.describe(server_id="Select a server to list players for")
     async def online_players(self, ctx, server_id: str):
         """List online players for a server"""
         
@@ -586,7 +586,7 @@ class Events(commands.Cog):
     
     @events.command(name="config", description="Configure event notifications")
     @app_commands.describe(
-        server_id="The ID of the server to configure",
+        server_id="Select a server to configure",
         mission="Enable mission event notifications (True/False)",
         airdrop="Enable airdrop event notifications (True/False)",
         crash="Enable crash event notifications (True/False)",
@@ -668,8 +668,8 @@ class Events(commands.Cog):
                 
                 embed.add_field(
                     name="How to Configure",
-                    value="Use `/events config server_id:<server_id> event_type:<true/false>` to enable or disable notifications. " \
-                          "For example, `/events config server_id:my_server mission:true airdrop:false`.",
+                    value="Use `/events config server:<server_name> event_type:<true/false>` to enable or disable notifications. " \
+                          "For example, `/events config server:my_server mission:true airdrop:false`.",
                     inline=False
                 )
                 
@@ -716,7 +716,7 @@ class Events(commands.Cog):
     
     @events.command(name="conn_config", description="Configure connection notifications")
     @app_commands.describe(
-        server_id="The ID of the server to configure",
+        server_id="Select a server to configure",
         connect="Enable player connection notifications (True/False)",
         disconnect="Enable player disconnection notifications (True/False)"
     )
@@ -778,7 +778,7 @@ class Events(commands.Cog):
                 
                 embed.add_field(
                     name="How to Configure",
-                    value="Use `/events conn_config server_id:<server_id> connect:<true/false> disconnect:<true/false>` to enable or disable notifications.",
+                    value="Use `/events conn_config server:<server_name> connect:<true/false> disconnect:<true/false>` to enable or disable notifications.",
                     inline=False
                 )
                 
@@ -825,7 +825,7 @@ class Events(commands.Cog):
     
     @events.command(name="suicide_config", description="Configure suicide notifications")
     @app_commands.describe(
-        server_id="The ID of the server to configure",
+        server_id="Select a server to configure",
         menu="Enable menu suicide notifications (True/False)",
         fall="Enable fall damage suicide notifications (True/False)",
         other="Enable other suicide notifications (True/False)"
@@ -891,7 +891,7 @@ class Events(commands.Cog):
                 
                 embed.add_field(
                     name="How to Configure",
-                    value="Use `/events suicide_config server_id:<server_id> menu:<true/false> fall:<true/false> other:<true/false>` " \
+                    value="Use `/events suicide_config server:<server_name> menu:<true/false> fall:<true/false> other:<true/false>` " \
                           "to enable or disable notifications.",
                     inline=False
                 )

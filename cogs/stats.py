@@ -62,7 +62,7 @@ async def server_id_autocomplete(interaction, current):
         
         # Filter by current input
         filtered_servers = [
-            app_commands.Choice(name=f"{server['name']} ({server['id']})", value=server['id'])
+            app_commands.Choice(name=server['name'], value=server['id'])
             for server in servers
             if current.lower() in server['id'].lower() or current.lower() in server['name'].lower()
         ]
@@ -153,6 +153,62 @@ async def player_name_autocomplete(interaction, current):
         return [app_commands.Choice(name="Error loading players", value="")]
 
 
+async def weapon_name_autocomplete(interaction, current):
+    """Autocomplete for weapon names"""
+    try:
+        # Get user's guild ID and the server ID from the command options
+        guild_id = interaction.guild_id
+        
+        # Try to get the server_id from the interaction
+        server_id = None
+        for option in interaction.data.get("options", []):
+            if option.get("name") == "server_id":
+                server_id = option.get("value")
+                break
+            
+            # Check in subcommands
+            for suboption in option.get("options", []):
+                if suboption.get("name") == "server_id":
+                    server_id = suboption.get("value")
+                    break
+        
+        if not server_id:
+            return [app_commands.Choice(name="Select a server first", value="")]
+            
+        # Import weapon stats
+        from utils.weapon_stats import WEAPON_CATEGORIES, WEAPON_DETAILS
+        
+        # Get all available weapon names
+        all_weapons = []
+        for category, weapons in WEAPON_CATEGORIES.items():
+            if category != "death_types":  # Exclude death types
+                all_weapons.extend(weapons)
+        
+        # Add any additional weapons from WEAPON_DETAILS that might not be in categories
+        all_weapons.extend([weapon for weapon in WEAPON_DETAILS.keys() 
+                          if weapon not in all_weapons and weapon not in WEAPON_CATEGORIES.get("death_types", [])])
+        
+        # Filter by current input
+        if current:
+            filtered_weapons = [
+                app_commands.Choice(name=weapon, value=weapon)
+                for weapon in all_weapons
+                if current.lower() in weapon.lower()
+            ]
+        else:
+            # Without filtering, show all weapons
+            filtered_weapons = [
+                app_commands.Choice(name=weapon, value=weapon)
+                for weapon in all_weapons
+            ]
+        
+        return filtered_weapons[:25]
+        
+    except Exception as e:
+        logger.error(f"Error in weapon autocomplete: {e}", exc_info=True)
+        return [app_commands.Choice(name="Error loading weapons", value="")]
+
+
 class Stats(commands.Cog):
     """Stats commands for player and server stats"""
     
@@ -170,7 +226,7 @@ class Stats(commands.Cog):
     
     @stats.command(name="player", description="View player statistics")
     @app_commands.describe(
-        server_id="The server ID to check stats for",
+        server_id="The server to check stats for",
         player_name="The player name to search for"
     )
     @app_commands.autocomplete(
@@ -180,6 +236,9 @@ class Stats(commands.Cog):
     async def player_stats(self, ctx, server_id: str, player_name: str):
         """View statistics for a player"""
         try:
+            # Defer response to prevent timeout
+            await ctx.defer()
+            
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
             if not guild_data:
@@ -605,12 +664,14 @@ class Stats(commands.Cog):
             await ctx.send(embed=embed)
     
     @stats.command(name="server", description="View server statistics")
-    @app_commands.describe(server_id="The server ID to check stats for")
+    @app_commands.describe(server_id="The server to check stats for")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def server_stats(self, ctx, server_id: str):
         """View statistics for a server"""
         
         try:
+            # Defer response to prevent timeout
+            await ctx.defer()
             # Get guild model for themed embed
             guild_data = None
             guild_model = None
@@ -702,7 +763,7 @@ class Stats(commands.Cog):
     
     @stats.command(name="leaderboard", description="View player leaderboards")
     @app_commands.describe(
-        server_id="The server ID to check leaderboards for",
+        server_id="The server to check leaderboards for",
         stat="The statistic to rank by",
         limit="Number of players to show (max 25)"
     )
@@ -826,13 +887,15 @@ class Stats(commands.Cog):
     
     @stats.command(name="weapon_categories", description="View statistics by weapon category")
     @app_commands.describe(
-        server_id="The server ID to check stats for"
+        server_id="The server to check stats for"
     )
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def weapon_categories(self, ctx, server_id: str):
         """View statistics by weapon category"""
         
         try:
+            # Defer response to prevent timeout
+            await ctx.defer()
             # Get guild model for themed embed
             guild_data = None
             guild_model = None
@@ -971,14 +1034,19 @@ class Stats(commands.Cog):
             
     @stats.command(name="weapon", description="View weapon statistics")
     @app_commands.describe(
-        server_id="The server ID to check stats for",
-        weapon_name="The weapon name to search for (partial match)"
+        server_id="The server to check stats for",
+        weapon_name="The weapon to view statistics for"
     )
-    @app_commands.autocomplete(server_id=server_id_autocomplete)
+    @app_commands.autocomplete(
+        server_id=server_id_autocomplete,
+        weapon_name=weapon_name_autocomplete
+    )
     async def weapon_stats(self, ctx, server_id: str, weapon_name: str):
         """View statistics for a specific weapon"""
         
         try:
+            # Defer response to prevent timeout
+            await ctx.defer()
             # Get guild model for themed embed
             guild_data = None
             guild_model = None
