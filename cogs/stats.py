@@ -61,11 +61,21 @@ async def server_id_autocomplete(interaction, current):
         servers = cog.server_autocomplete_cache.get(guild_id, {}).get("servers", [])
         
         # Filter by current input
-        filtered_servers = [
-            app_commands.Choice(name=server['name'], value=server['id'])
-            for server in servers
-            if current.lower() in server['id'].lower() or current.lower() in server['name'].lower()
-        ]
+        filtered_servers = []
+        for server in servers:
+            # Always ensure server_id is a string for consistent comparison
+            raw_server_id = server['id']
+            server_id = str(raw_server_id) if raw_server_id is not None else ""
+            
+            # Log the type conversions for debugging
+            logger.debug(f"Stats autocomplete converting server_id from {type(raw_server_id).__name__} to string: {server_id}")
+            
+            # Check if current input matches server name or ID
+            if current.lower() in server_id.lower() or current.lower() in server['name'].lower():
+                filtered_servers.append(app_commands.Choice(
+                    name=server['name'], 
+                    value=server_id  # Ensure this is a string
+                ))
         
         return filtered_servers[:25]
         
