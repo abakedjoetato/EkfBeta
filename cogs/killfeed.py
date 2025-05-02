@@ -697,20 +697,36 @@ async def update_player_stats(bot, server_id, kill_event):
             if not victim:
                 victim = await Player.create_or_update(bot.db, victim_data)
                 
-            # Record kill for killer
-            kill_result = await killer.record_kill(
-                victim_id=victim.id,
-                victim_name=victim.name,
-                weapon=kill_event["weapon"],
-                distance=kill_event["distance"]
-            )
-            
-            # Verify the kill was recorded
-            if not kill_result:
-                logger.warning(f"Failed to record kill for player {killer_name} ({killer_id}) - retrying with updated data")
-                # Try one more time with fresh data
-                killer = await Player.get_by_id(bot.db, killer_id, server_id)
-                if killer:
+            # Record kill for killer (with null checking)
+            if killer and victim:
+                kill_result = await killer.record_kill(
+                    victim_id=victim.id,
+                    victim_name=victim.name,
+                    weapon=kill_event["weapon"],
+                    distance=kill_event["distance"]
+                )
+                
+                # Verify the kill was recorded
+                if not kill_result:
+                    logger.warning(f"Failed to record kill for player {killer_name} ({killer_id}) - retrying with updated data")
+                    # Try one more time with fresh data
+                    killer = await Player.get_by_id(bot.db, killer_id, server_id)
+                    if killer:
+                        await killer.record_kill(
+                            victim_id=victim.id,
+                            victim_name=victim.name,
+                            weapon=kill_event["weapon"],
+                            distance=kill_event["distance"]
+                        )
+            else:
+                logger.warning(f"Could not record kill: killer={killer is not None}, victim={victim is not None}")
+                # Try to create the missing players again
+                if not killer:
+                    killer = await Player.create_or_update(bot.db, killer_data)
+                if not victim:
+                    victim = await Player.create_or_update(bot.db, victim_data)
+                # If both players exist now, try again
+                if killer and victim:
                     await killer.record_kill(
                         victim_id=victim.id,
                         victim_name=victim.name,
@@ -718,82 +734,100 @@ async def update_player_stats(bot, server_id, kill_event):
                         distance=kill_event["distance"]
                     )
             
-            # Record death for victim
-            death_result = await victim.record_death(
-                killer_id=killer.id,
-                killer_name=killer.name
-            )
-            
-            # Verify the death was recorded
-            if not death_result:
-                logger.warning(f"Failed to record death for player {victim_name} ({victim_id}) - retrying with updated data")
-                # Try one more time with fresh data
-                victim = await Player.get_by_id(bot.db, victim_id, server_id)
-                if victim:
+            # Record death for victim (with null checking)
+            if victim and killer:
+                death_result = await victim.record_death(
+                    killer_id=killer.id,
+                    killer_name=killer.name
+                )
+                
+                # Verify the death was recorded
+                if not death_result:
+                    logger.warning(f"Failed to record death for player {victim_name} ({victim_id}) - retrying with updated data")
+                    # Try one more time with fresh data
+                    victim = await Player.get_by_id(bot.db, victim_id, server_id)
+                    if victim:
+                        await victim.record_death(
+                            killer_id=killer.id,
+                            killer_name=killer.name
+                        )
+            else:
+                logger.warning(f"Could not record death: killer={killer is not None}, victim={victim is not None}")
+                # We already tried to create the players again above, but double-check
+                if killer and victim:
                     await victim.record_death(
                         killer_id=killer.id,
                         killer_name=killer.name
                     )
             
             # Award currency for kill if economy feature is enabled
-            if has_economy:
-                from models.economy import Economy
-                
-                # Get or create economy data for killer
-                killer_economy = await Economy.get_by_player(bot.db, killer.id, server_id)
-                if not killer_economy:
-                    killer_economy = await Economy.create_or_update(bot.db, killer.id, server_id)
-                
-                # Base reward amount
-                reward_amount = 10
-                
-                # Bonus for long-distance kills
-                distance = kill_event.get("distance", 0)
-                if distance >= 100:
-                    reward_amount += min(int(distance / 10), 50)  # Cap bonus at +50 credits
-                
-                # Bonus for killstreaks
-                if killer.current_streak > 1:
-                    killstreak = killer.current_streak
+            if has_economy and killer and victim:  # Ensure both players exist before awarding currency
+                try:
+                    from models.economy import Economy
                     
-                    # Escalating rewards for killstreaks
-                    if killstreak == 5:
-                        streak_bonus = 25
-                        streak_type = "killstreak_5"
-                    elif killstreak == 10:
-                        streak_bonus = 50
-                        streak_type = "killstreak_10"
-                    elif killstreak == 15:
-                        streak_bonus = 100
-                        streak_type = "killstreak_15"
-                    elif killstreak == 20:
-                        streak_bonus = 200
-                        streak_type = "killstreak_20"
-                    elif killstreak >= 25:
-                        streak_bonus = 300
-                        streak_type = "killstreak_25_plus"
-                    elif killstreak >= 3:
-                        streak_bonus = 15
-                        streak_type = "killstreak_3"
-                    else:
-                        streak_bonus = 0
-                        streak_type = None
+                    # Get or create economy data for killer
+                    killer_economy = await Economy.get_by_player(bot.db, killer.id, server_id)
+                    if not killer_economy:
+                        killer_economy = await Economy.create_or_update(bot.db, killer.id, server_id)
                     
-                    # If there's a streak bonus, award it separately
-                    if streak_bonus > 0 and streak_type:
-                        await killer_economy.add_currency(streak_bonus, streak_type, {
-                            "killstreak": killstreak,
+                    if killer_economy:  # Double-check that we have a valid economy object
+                        # Base reward amount
+                        reward_amount = 10
+                        
+                        # Bonus for long-distance kills
+                        distance = kill_event.get("distance", 0)
+                        if distance >= 100:
+                            reward_amount += min(int(distance / 10), 50)  # Cap bonus at +50 credits
+                        
+                        # Bonus for killstreaks
+                        if killer.current_streak > 1:
+                            killstreak = killer.current_streak
+                            
+                            # Escalating rewards for killstreaks
+                            if killstreak == 5:
+                                streak_bonus = 25
+                                streak_type = "killstreak_5"
+                            elif killstreak == 10:
+                                streak_bonus = 50
+                                streak_type = "killstreak_10"
+                            elif killstreak == 15:
+                                streak_bonus = 100
+                                streak_type = "killstreak_15"
+                            elif killstreak == 20:
+                                streak_bonus = 200
+                                streak_type = "killstreak_20"
+                            elif killstreak >= 25:
+                                streak_bonus = 300
+                                streak_type = "killstreak_25_plus"
+                            elif killstreak >= 3:
+                                streak_bonus = 15
+                                streak_type = "killstreak_3"
+                            else:
+                                streak_bonus = 0
+                                streak_type = None
+                            
+                            # If there's a streak bonus, award it separately
+                            if streak_bonus > 0 and streak_type:
+                                await killer_economy.add_currency(streak_bonus, streak_type, {
+                                    "killstreak": killstreak,
+                                    "victim_id": victim.id,
+                                    "victim_name": victim.name
+                                })
+                        
+                        # Award base currency with kill details
+                        await killer_economy.add_currency(reward_amount, "kill_reward", {
                             "victim_id": victim.id,
-                            "victim_name": victim.name
+                            "victim_name": victim.name,
+                            "weapon": kill_event.get("weapon", "unknown"),
+                            "distance": distance
                         })
-                
-                # Award base currency with kill details
-                await killer_economy.add_currency(reward_amount, "kill_reward", {
-                    "victim_id": victim.id,
-                    "victim_name": victim.name,
-                    "weapon": kill_event.get("weapon", "unknown"),
-                    "distance": distance
-                })
+                    else:
+                        logger.warning(f"Could not create economy profile for player {killer_name} ({killer_id})")
+                except Exception as econ_e:
+                    logger.error(f"Error updating economy for kill: {econ_e}")
+            elif has_economy:
+                logger.warning(f"Could not award currency: killer={killer is not None}, victim={victim is not None}")
+
         
         # Explicitly update leaderboards by resetting cache
         # This is a workaround to ensure leaderboards reflect the new stats

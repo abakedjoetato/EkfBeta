@@ -19,24 +19,43 @@ class CSVParser:
         try:
             parts = line.strip().split(';')
             
+            # Debug info
+            logger.debug(f"Parsing CSV line with {len(parts)} parts: {line}")
+            
             # Ensure we have all required fields
             if len(parts) < 7:
                 logger.warning(f"Invalid CSV line format (missing fields): {line}")
                 return None
+                
+            # Note: Some CSV lines may have a trailing delimiter creating an 8th empty field
+            # We'll ignore that extra field and remove any empty strings
+            parts = [p for p in parts if p.strip()]
             
-            # Extract fields
-            timestamp_str = parts[CSV_FIELDS["timestamp"]]
-            killer_name = parts[CSV_FIELDS["killer_name"]]
-            killer_id = parts[CSV_FIELDS["killer_id"]]
-            victim_name = parts[CSV_FIELDS["victim_name"]]
-            victim_id = parts[CSV_FIELDS["victim_id"]]
-            weapon = parts[CSV_FIELDS["weapon"]]
-            
-            # Try to parse distance as int, default to 0 if fails
+            # Extract fields (with more validation)
             try:
-                distance = int(parts[CSV_FIELDS["distance"]])
-            except (ValueError, IndexError):
-                distance = 0
+                timestamp_str = parts[CSV_FIELDS["timestamp"]]
+                killer_name = parts[CSV_FIELDS["killer_name"]]
+                killer_id = parts[CSV_FIELDS["killer_id"]]
+                victim_name = parts[CSV_FIELDS["victim_name"]]
+                victim_id = parts[CSV_FIELDS["victim_id"]]
+                weapon = parts[CSV_FIELDS["weapon"]]
+                
+                # Additional validation
+                if not timestamp_str or not killer_id or not victim_id:
+                    logger.warning(f"Missing required field values in line: {line}")
+                    return None
+                
+                # Try to parse distance as int, default to 0 if fails
+                try:
+                    if CSV_FIELDS["distance"] < len(parts):
+                        distance = int(parts[CSV_FIELDS["distance"]])
+                    else:
+                        distance = 0
+                except (ValueError, IndexError):
+                    distance = 0
+            except IndexError:
+                logger.warning(f"Index error while parsing CSV line: {line}")
+                return None
             
             # Parse timestamp
             try:
