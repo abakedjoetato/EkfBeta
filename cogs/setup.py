@@ -14,7 +14,7 @@ from models.guild import Guild
 from models.server import Server
 from utils.sftp import SFTPClient
 from utils.embed_builder import EmbedBuilder
-from utils.helpers import has_admin_permission, parse_sftp_url
+from utils.helpers import has_admin_permission
 from utils.parsers import CSVParser
 
 logger = logging.getLogger(__name__)
@@ -36,10 +36,13 @@ class Setup(commands.Cog):
     @app_commands.describe(
         server_id="Unique ID for the server (letters, numbers, underscores only)",
         server_name="Friendly name to display for this server",
-        sftp_url="Connection string format: sftp://username:password@host:port"
+        host="SFTP host address",
+        port="SFTP port (default: 22)",
+        username="SFTP username",
+        password="SFTP password"
     )
     @app_commands.guild_only()
-    async def add_server(self, ctx, server_id: str, server_name: str, sftp_url: str):
+    async def add_server(self, ctx, server_id: str, server_name: str, host: str, username: str, password: str, port: int = 22):
         """Add a new server to track"""
         try:
             # Get guild model for themed embed
@@ -65,12 +68,19 @@ class Setup(commands.Cog):
                 await ctx.send(embed=embed)
                 return
             
-            # Parse SFTP URL
-            sftp_info = parse_sftp_url(sftp_url)
-            if not sftp_info:
+            # Store SFTP information
+            sftp_info = {
+                "host": host,
+                "port": port,
+                "username": username,
+                "password": password
+            }
+            
+            # Validate SFTP info
+            if not host or not username or not password:
                 embed = EmbedBuilder.create_error_embed(
-                    "Invalid SFTP URL",
-                    "SFTP URL should be in the format: sftp://username:password@host:port"
+                    "Invalid SFTP Information",
+                    "Please provide valid host, username, and password for SFTP connection."
                 , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
