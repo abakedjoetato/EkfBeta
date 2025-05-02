@@ -236,11 +236,20 @@ class Stats(commands.Cog):
     async def player_stats(self, ctx, server_id: str, player_name: str):
         """View statistics for a player"""
         try:
+            # Initialize guild_model to None first to avoid UnboundLocalError
+            guild_model = None
+            
             # Defer response to prevent timeout
             await ctx.defer()
             
-            # Get guild data
-            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+            # Get guild data and create guild model for embedded themes
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+                
             if not guild_data:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",

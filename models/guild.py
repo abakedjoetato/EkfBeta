@@ -150,11 +150,11 @@ class Guild:
             # Delete connections
             await self.db.connections.delete_many({"server_id": server_id})
             
-            # Keep players for historical purposes, but mark as inactive
-            await self.db.players.update_many(
-                {"server_id": server_id},
-                {"$set": {"active": False}}
-            )
+            # Delete player data completely
+            await self.db.players.delete_many({"server_id": server_id})
+            
+            # Also delete any economy data associated with the server
+            await self.db.economy.delete_many({"server_id": server_id})
             
             return True
         

@@ -14,6 +14,112 @@ class CSVParser:
     """Parser for CSV kill data files"""
     
     @staticmethod
+    def normalize_weapon_name(weapon: str) -> str:
+        """Normalize weapon names to ensure consistency
+        
+        This function standardizes weapon names by correcting common variations,
+        typos, and ensuring consistent capitalization and formatting.
+        
+        Args:
+            weapon: The weapon name from the CSV
+            
+        Returns:
+            Normalized weapon name
+        """
+        if not weapon or not weapon.strip():
+            return "Unknown"
+            
+        # Convert to lowercase for easier matching
+        weapon_lower = weapon.lower().strip()
+        
+        # Define weapon name corrections and aliases
+        weapon_corrections = {
+            # Rifles
+            "akm": "AKM",
+            "ak-47": "AKM",
+            "ak47": "AKM",
+            "ak74": "AK-74",
+            "ak-74": "AK-74",
+            "m4": "M4",
+            "m4a1": "M4",
+            "m16": "M16",
+            "m16a4": "M16",
+            "fal": "FAL",
+            "sks": "SKS",
+            
+            # SMGs
+            "bizon": "PP-19 Bizon",
+            "pp-19": "PP-19 Bizon",
+            "pp19": "PP-19 Bizon",
+            "pp_19": "PP-19 Bizon",
+            "pp-19bizon": "PP-19 Bizon",
+            "mp5": "MP5",
+            "mp-5": "MP5",
+            "mp_5": "MP5",
+            "ump": "UMP-45",
+            "ump45": "UMP-45",
+            "ump-45": "UMP-45",
+            "vector": "Vector",
+            
+            # Shotguns
+            "shotgun": "Shotgun",
+            "saiga": "Saiga-12",
+            "saiga12": "Saiga-12",
+            "saiga-12": "Saiga-12",
+            "pump": "Pump Shotgun",
+            "pump shotgun": "Pump Shotgun",
+            
+            # Pistols
+            "pm": "PM",
+            "makarov": "PM",
+            "1911": "1911",
+            "colt": "1911",
+            "colt1911": "1911",
+            "desert eagle": "Desert Eagle",
+            "deserteagle": "Desert Eagle",
+            "deagle": "Desert Eagle",
+            "glock": "Glock",
+            "glock19": "Glock",
+            
+            # Snipers
+            "svd": "SVD",
+            "dragunov": "SVD",
+            "m24": "M24",
+            "mosin": "Mosin",
+            "mosin-nagant": "Mosin",
+            
+            # Special
+            "falling": "Falling",
+            "suicide_by_relocation": "Suicide (Menu)",
+            "suicide": "Suicide",
+            "vehicle": "Vehicle",
+            "grenade": "Grenade",
+            "explosion": "Explosion",
+            "fire": "Fire",
+            "bleeding": "Bleeding",
+            "starvation": "Starvation",
+            "dehydration": "Dehydration",
+            "cold": "Cold",
+            "zombie": "Zombie",
+            "fists": "Fists",
+            "melee": "Melee",
+            "knife": "Knife",
+        }
+        
+        # Check for exact matches in our corrections dictionary
+        if weapon_lower in weapon_corrections:
+            return weapon_corrections[weapon_lower]
+            
+        # Check for partial matches
+        for partial, normalized in weapon_corrections.items():
+            if partial in weapon_lower:
+                return normalized
+                
+        # If no match found, just capitalize the first letter of each word
+        # and remove any extra spaces
+        return " ".join(w.capitalize() for w in weapon.split())
+    
+    @staticmethod
     def parse_kill_line(line: str) -> Optional[Dict[str, Any]]:
         """Parse a single line from a CSV file into a kill event"""
         try:
@@ -31,18 +137,51 @@ class CSVParser:
             # We'll ignore that extra field and remove any empty strings
             parts = [p for p in parts if p.strip()]
             
-            # Extract fields (with more validation)
-            try:
-                timestamp_str = parts[CSV_FIELDS["timestamp"]]
-                killer_name = parts[CSV_FIELDS["killer_name"]]
-                killer_id = parts[CSV_FIELDS["killer_id"]]
-                victim_name = parts[CSV_FIELDS["victim_name"]]
-                victim_id = parts[CSV_FIELDS["victim_id"]]
-                weapon = parts[CSV_FIELDS["weapon"]]
+            # The CSV format has been updated to include console information directly:
+            # Timestamp;Killer name;Killer ID;Victim name;Victim ID;Weapon;Distance;Killer console;Victim console;Blank
+            
+            # However, we still need to check for the special case of console connection lines
+            # These have a format with empty killer fields and non-empty victim console field
+            raw_parts = line.strip().split(';')
+            
+            # Check if this is a connection event (has empty killer fields)
+            if (len(raw_parts) >= 8 and 
+                (raw_parts[1] == "" or raw_parts[1].isspace()) and 
+                (raw_parts[2] == "" or raw_parts[2].isspace())):
+                # This might be a connection event - check for console indicators
+                # in either the traditional position or in the new console fields
+                console_indicators = ["XSX", "PS5", "PC"]
                 
-                # Additional validation
-                if not timestamp_str or not killer_id or not victim_id:
-                    logger.warning(f"Missing required field values in line: {line}")
+                has_console_indicator = False
+                for indicator in console_indicators:
+                    # Check anywhere in raw parts for console indicators
+                    if any(indicator in part for part in raw_parts if part.strip()):
+                        has_console_indicator = True
+                        break
+                        
+                if has_console_indicator:
+                    logger.debug(f"Detected console connection line: {line}")
+                    return None  # Skip these lines as they're not actual kill events
+            
+            # Extract fields with validation
+            try:
+                # Get timestamp which should always be present
+                timestamp_str = parts[CSV_FIELDS["timestamp"]]
+                
+                # For the rest of the fields, use defaults if they might be missing
+                killer_name = parts[CSV_FIELDS["killer_name"]] if len(parts) > CSV_FIELDS["killer_name"] else ""
+                killer_id = parts[CSV_FIELDS["killer_id"]] if len(parts) > CSV_FIELDS["killer_id"] else ""
+                victim_name = parts[CSV_FIELDS["victim_name"]] if len(parts) > CSV_FIELDS["victim_name"] else ""
+                victim_id = parts[CSV_FIELDS["victim_id"]] if len(parts) > CSV_FIELDS["victim_id"] else ""
+                
+                # Handle weapon field - this is where we might have unrecognized weapons
+                weapon = ""
+                if len(parts) > CSV_FIELDS["weapon"]:
+                    weapon = CSVParser.normalize_weapon_name(parts[CSV_FIELDS["weapon"]])
+                
+                # Additional validation - we need at least timestamp, victim ID and either weapon or killer ID
+                if not timestamp_str or not victim_id or (not weapon and not killer_id):
+                    logger.warning(f"Missing critical field values in line: {line}")
                     return None
                 
                 # Try to parse distance as int, default to 0 if fails
@@ -79,7 +218,18 @@ class CSVParser:
                 else:
                     suicide_type = "other"
             
-            # Create kill event
+            # Get console information if available
+            killer_console = ""
+            victim_console = ""
+            
+            # Check if console fields are present in raw parts (new format)
+            if len(raw_parts) > CSV_FIELDS["killer_console"]:
+                killer_console = raw_parts[CSV_FIELDS["killer_console"]].strip()
+            
+            if len(raw_parts) > CSV_FIELDS["victim_console"]:
+                victim_console = raw_parts[CSV_FIELDS["victim_console"]].strip()
+            
+            # Create kill event with console information
             kill_event = {
                 "timestamp": timestamp,
                 "killer_name": killer_name,
@@ -88,6 +238,8 @@ class CSVParser:
                 "victim_id": victim_id,
                 "weapon": weapon,
                 "distance": distance,
+                "killer_console": killer_console,
+                "victim_console": victim_console,
                 "is_suicide": is_suicide,
                 "suicide_type": suicide_type
             }

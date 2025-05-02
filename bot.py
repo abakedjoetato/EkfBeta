@@ -222,31 +222,61 @@ async def setup_background_tasks(bot):
     interest_task = asyncio.create_task(pay_interest_task(bot))
     bot.background_tasks["interest_payment"] = interest_task
     
-    async for guild_doc in cursor:
-        guild_id = guild_doc["guild_id"]
-        
-        # For each server in the guild, start monitoring
-        for server in guild_doc["servers"]:
-            server_id = server["server_id"]
+    # Check if we have any guilds first - avoid errors if database is empty
+    guild_count = await bot.db.guilds.count_documents({"servers": {"$exists": True, "$ne": []}})
+    if guild_count == 0:
+        logger.info("No guilds with servers found in database. Skipping background task setup.")
+        return
+    
+    try:
+        async for guild_doc in cursor:
+            guild_id = guild_doc["guild_id"]
             
-            # Import the background task functions
-            from cogs.killfeed import start_killfeed_monitor
-            from cogs.events import start_events_monitor
+            # Check if the bot can actually access this guild
+            discord_guild = bot.get_guild(int(guild_id))
+            if not discord_guild:
+                logger.warning(f"Guild {guild_id} not found in bot's guilds. Skipping background tasks.")
+                continue
             
-            # Get guild premium tier
-            premium_tier = guild_doc.get("premium_tier", 0)
-            
-            # Start killfeed monitor (available for all tiers)
-            killfeed_task = asyncio.create_task(
-                start_killfeed_monitor(bot, guild_id, server_id)
-            )
-            task_name = f"killfeed_{guild_id}_{server_id}"
-            bot.background_tasks[task_name] = killfeed_task
-            
-            # Start events monitor (premium tier 1+)
-            if premium_tier >= 1:
-                events_task = asyncio.create_task(
-                    start_events_monitor(bot, guild_id, server_id)
-                )
-                task_name = f"events_{guild_id}_{server_id}"
-                bot.background_tasks[task_name] = events_task
+            # For each server in the guild, start monitoring
+            for server in guild_doc["servers"]:
+                try:
+                    server_id = server["server_id"]
+                    
+                    # Verify server has necessary channel configuration
+                    killfeed_channel_id = server.get("killfeed_channel_id")
+                    events_channel_id = server.get("events_channel_id")
+                    
+                    # Import the background task functions
+                    from cogs.killfeed import start_killfeed_monitor
+                    from cogs.events import start_events_monitor
+                    
+                    # Get guild premium tier
+                    premium_tier = guild_doc.get("premium_tier", 0)
+                    
+                    # Start killfeed monitor (available for all tiers)
+                    if killfeed_channel_id:
+                        killfeed_task = asyncio.create_task(
+                            start_killfeed_monitor(bot, guild_id, server_id)
+                        )
+                        task_name = f"killfeed_{guild_id}_{server_id}"
+                        bot.background_tasks[task_name] = killfeed_task
+                        logger.info(f"Starting killfeed monitor for server {server_id} in guild {guild_id}")
+                    else:
+                        logger.warning(f"No killfeed channel configured for server {server_id} in guild {guild_id}")
+                    
+                    # Start events monitor (premium tier 1+)
+                    if premium_tier >= 1 and events_channel_id:
+                        events_task = asyncio.create_task(
+                            start_events_monitor(bot, guild_id, server_id)
+                        )
+                        task_name = f"events_{guild_id}_{server_id}"
+                        bot.background_tasks[task_name] = events_task
+                        logger.info(f"Starting events monitor for server {server_id} in guild {guild_id}")
+                    elif premium_tier >= 1 and not events_channel_id:
+                        logger.warning(f"No events channel configured for server {server_id} in guild {guild_id}")
+                except Exception as server_error:
+                    logger.error(f"Error setting up background tasks for server {server.get('server_id', 'unknown')} in guild {guild_id}: {server_error}")
+                    continue
+    except Exception as e:
+        logger.error(f"Error setting up background tasks: {e}", exc_info=True)

@@ -642,49 +642,62 @@ class SFTPClient:
             return 0
         
         try:
-            # Use chunked reading to count lines and avoid timeout
-            total_lines = 0
-            current_position = 0
-            
-            # Use the read_file method that already has timeout protection
-            while True:
-                # Read a chunk of lines
-                chunk_lines = await self.read_file(
-                    file_path,
-                    start_line=current_position,
-                    max_lines=chunk_size,
-                    chunk_size=1000  # Smaller inner chunks for better timeout handling
+            # OPTIMIZATION: Use a more efficient method to count lines
+            # This runs in a background thread to avoid blocking the event loop
+            try:
+                # We'll use Python's file iterator which is much faster for counting lines
+                # This will be executed in a separate thread to prevent blocking
+                def count_lines():
+                    try:
+                        with self.sftp.file(file_path, 'r') as f:
+                            # Count lines in batches for very large files
+                            count = 0
+                            # Set a maximum number of lines to count to prevent extreme timeouts
+                            # For very large files, we'll fall back to estimation anyway
+                            max_count = 50000
+                            
+                            for i, _ in enumerate(f):
+                                count = i + 1
+                                # Every chunk_size lines, yield to allow checking for timeout
+                                if count % chunk_size == 0:
+                                    # Just continue the loop
+                                    pass
+                                    
+                                # Break early for extremely large files
+                                if count >= max_count:
+                                    # Add 10% to indicate it's larger
+                                    logger.warning(f"File {file_path} exceeds {max_count} lines, using estimate")
+                                    return int(count * 1.1)
+                                    
+                            return count
+                    except Exception as e:
+                        logger.error(f"Error counting lines in thread: {e}")
+                        return 0
+                        
+                # Run the counting function in a thread with a timeout
+                logger.debug(f"Counting lines in {file_path} with timeout protection")
+                return await asyncio.wait_for(
+                    asyncio.to_thread(count_lines),
+                    timeout=10.0  # More generous timeout since we need to scan the whole file
                 )
                 
-                # If no lines were read, we've reached the end of the file
-                if not chunk_lines:
-                    break
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout while counting lines in {file_path}, falling back to estimation")
+                # Fall back to an estimation method on timeout
+                try:
+                    # Get file attributes
+                    attrs = self.sftp.stat(file_path)
+                    # Estimate based on file size - assume 100 bytes per line as a rough guess
+                    # This is better than nothing if the full count times out
+                    estimated_lines = attrs.st_size // 100
+                    logger.info(f"File {file_path} has estimated {estimated_lines} lines based on size {attrs.st_size} bytes")
+                    return estimated_lines
+                except Exception as est_error:
+                    logger.error(f"Error estimating file size: {est_error}")
+                    return 5000  # Arbitrary fallback if all else fails
                     
-                # Update position and count
-                chunk_count = len(chunk_lines)
-                total_lines += chunk_count
-                current_position += chunk_count
-                
-                # If we read fewer lines than requested, we're at the end of the file
-                if chunk_count < chunk_size:
-                    break
-                    
-                # Add a small delay to let the event loop handle other tasks
-                await asyncio.sleep(0.01)
-                
-                # Log progress for large files
-                if total_lines % 50000 == 0:
-                    logger.info(f"Counted {total_lines} lines in {file_path} so far...")
-            
-            logger.info(f"File {file_path} has {total_lines} lines")
-            return total_lines
-                
         except Exception as e:
-            logger.error(f"Error getting file size for {file_path}: {e}", exc_info=True)
-            # Try to reconnect after an error
-            await self.disconnect()
-            await asyncio.sleep(1)
-            await self.connect()
+            logger.error(f"Error in get_file_size: {e}", exc_info=True)
             return 0
     
     @staticmethod

@@ -318,13 +318,20 @@ class Killfeed(commands.Cog):
     
     async def _check_permission(self, ctx) -> bool:
         """Check if user has permission to use the command"""
+        # Initialize guild_model to None first to avoid UnboundLocalError
+        guild_model = None
+        
         # Check if user has admin permission
         if has_admin_permission(ctx):
             return True
         
         # If not, send error message
         # Get the guild model for theme
-        guild_model = await Guild.get_by_id(self.bot.db, ctx.guild.id)
+        try:
+            guild_model = await Guild.get_by_id(self.bot.db, ctx.guild.id)
+        except Exception as e:
+            logger.warning(f"Error getting guild model in permission check: {e}")
+            
         embed = EmbedBuilder.create_error_embed(
             "Permission Denied",
             "You need administrator permission or the designated admin role to use this command.",
@@ -385,6 +392,18 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
     """Background task to monitor killfeed for a server"""
     from config import KILLFEED_REFRESH_INTERVAL
     
+    # Check if we actually have server data in the database
+    # This prevents errors when the bot starts up with empty database
+    if await bot.db.guilds.count_documents({"guild_id": guild_id, "servers": {"$exists": True, "$ne": []}}) == 0:
+        logger.warning(f"No servers found for guild {guild_id} - skipping killfeed monitor")
+        return
+    
+    # Check if guild exists in bot's cache
+    discord_guild = bot.get_guild(int(guild_id))
+    if not discord_guild:
+        logger.error(f"Guild {guild_id} not found in bot's cache - skipping killfeed monitor")
+        return
+    
     logger.info(f"Starting killfeed monitor for server {server_id} in guild {guild_id}")
     
     try:
@@ -392,6 +411,12 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
         server = await Server.get_by_id(bot.db, server_id, guild_id)
         if not server:
             logger.error(f"Server {server_id} not found in guild {guild_id}")
+            return
+            
+        # Verify channel configuration
+        killfeed_channel_id = server.killfeed_channel_id
+        if not killfeed_channel_id:
+            logger.warning(f"No killfeed channel configured for server {server_id} in guild {guild_id}")
             return
         
         # Create SFTP client connection

@@ -398,8 +398,12 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Confirm Server Removal",
                 f"Are you sure you want to remove server '{server_name}' ({server_id})?\n\n"
-                "This will stop all monitoring tasks and delete historical data for this server.\n"
-                "This action cannot be undone."
+                "This will:\n"
+                "• Stop all monitoring tasks\n"
+                "• Delete ALL historical kill data\n"
+                "• Delete ALL player statistics\n"
+                "• Delete ALL economy data\n\n"
+                "⚠️ This action CANNOT be undone and ALL statistics will be permanently lost! ⚠️"
             )
             
             # Create confirmation buttons
@@ -478,7 +482,12 @@ class Setup(commands.Cog):
             if removed:
                 embed = EmbedBuilder.create_success_embed(
                     "Server Removed",
-                    f"Server '{server_name}' has been removed successfully, along with all its data."
+                    f"Server '{server_name}' has been completely removed.\n\n" +
+                    "All related data has been permanently deleted including:\n" +
+                    "• All kill records\n" +
+                    "• All player statistics\n" +
+                    "• All economy and currency data\n\n" +
+                    "To add this server again, use the `/setup addserver` command."
                 , guild=guild_model)
                 await message.edit(embed=embed)
             else:
@@ -653,19 +662,19 @@ class Setup(commands.Cog):
         """List all configured servers for this guild"""
         
         try:
-            # Defer response to prevent timeout
-            await ctx.defer()
-            
-            # Get guild model for themed embed
-            
-            guild_data = None
+            # Initialize guild_model early to avoid UnboundLocalError
             guild_model = None
+            
+            # Get guild model for themed embed early - before any potential returns
             try:
                 guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
                 if guild_data:
                     guild_model = Guild(self.bot.db, guild_data)
             except Exception as e:
                 logger.warning(f"Error getting guild model: {e}")
+                
+            # Defer response to prevent timeout
+            await ctx.defer()
 
             # Get guild
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
@@ -1137,13 +1146,20 @@ class Setup(commands.Cog):
     
     async def _check_permission(self, ctx) -> bool:
         """Check if user has permission to use the command"""
+        # Initialize guild_model to None first to avoid UnboundLocalError
+        guild_model = None
+        
         # Check if user has admin permission
         if has_admin_permission(ctx):
             return True
         
         # If not, send error message
         # Get the guild model for theme
-        guild_model = await Guild.get_by_id(self.bot.db, ctx.guild.id)
+        try:
+            guild_model = await Guild.get_by_id(self.bot.db, ctx.guild.id)
+        except Exception as e:
+            logger.warning(f"Error getting guild model in permission check: {e}")
+            
         embed = EmbedBuilder.create_error_embed(
             "Permission Denied",
             "You need administrator permission or the designated admin role to use this command.",

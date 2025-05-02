@@ -53,6 +53,8 @@ CSV_FILENAME_PATTERN = r".*\.csv$"
 LOG_FILENAME = "Deadside.log"
 
 # CSV file structure
+# Updated structure based on new format:
+# Timestamp;Killer name;Killer ID;Victim name;Victim ID;Weapon;Distance;Killer console;Victim console;Blank
 CSV_FIELDS = {
     "timestamp": 0,
     "killer_name": 1,
@@ -61,6 +63,8 @@ CSV_FIELDS = {
     "victim_id": 4,
     "weapon": 5,
     "distance": 6,
+    "killer_console": 7,
+    "victim_console": 8,
 }
 
 # Premium tiers configuration
