@@ -85,7 +85,7 @@ class Killfeed(commands.Cog):
             await ctx.send("Please specify a subcommand.")
     
     @killfeed.command(name="start", description="Start monitoring killfeed for a server")
-    @app_commands.describe(server_id="Select a server to monitor")
+    @app_commands.describe(server_id="Select a server by name to monitor")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def start(self, ctx, server_id: str):
         """Start the killfeed monitor for a server"""
@@ -182,7 +182,7 @@ class Killfeed(commands.Cog):
             await ctx.send(embed=embed)
     
     @killfeed.command(name="stop", description="Stop monitoring killfeed for a server")
-    @app_commands.describe(server_id="Select a server to stop monitoring")
+    @app_commands.describe(server_id="Select a server by name to stop monitoring")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def stop(self, ctx, server_id: str):
         """Stop the killfeed monitor for a server"""

@@ -159,7 +159,7 @@ class Events(commands.Cog):
             await ctx.send(embed=embed)
     
     @events.command(name="start", description="Start monitoring events for a server")
-    @app_commands.describe(server_id="Select a server to monitor")
+    @app_commands.describe(server_id="Select a server by name to monitor")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def start(self, ctx, server_id: str):
         """Start the events monitor for a server"""
@@ -267,7 +267,7 @@ class Events(commands.Cog):
             await ctx.send(embed=embed)
     
     @events.command(name="stop", description="Stop monitoring events for a server")
-    @app_commands.describe(server_id="Select a server to stop monitoring")
+    @app_commands.describe(server_id="Select a server by name to stop monitoring")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def stop(self, ctx, server_id: str):
         """Stop the events monitor for a server"""
@@ -412,7 +412,7 @@ class Events(commands.Cog):
     
     @events.command(name="list", description="List recent events for a server")
     @app_commands.describe(
-        server_id="Select a server to list events for",
+        server_id="Select a server by name to list events for",
         event_type="Filter events by type",
         limit="Number of events to show (max 20)"
     )
@@ -549,7 +549,7 @@ class Events(commands.Cog):
             await ctx.send(embed=embed)
     
     @events.command(name="players", description="List online players for a server")
-    @app_commands.describe(server_id="Select a server to list players for")
+    @app_commands.describe(server_id="Select a server by name to list players for")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def online_players(self, ctx, server_id: str):
         """List online players for a server"""
@@ -642,7 +642,7 @@ class Events(commands.Cog):
     
     @events.command(name="config", description="Configure event notifications")
     @app_commands.describe(
-        server_id="Select a server to configure",
+        server_id="Select a server by name to configure",
         mission="Enable mission event notifications (True/False)",
         airdrop="Enable airdrop event notifications (True/False)",
         crash="Enable crash event notifications (True/False)",
@@ -773,7 +773,7 @@ class Events(commands.Cog):
     
     @events.command(name="conn_config", description="Configure connection notifications")
     @app_commands.describe(
-        server_id="Select a server to configure",
+        server_id="Select a server by name to configure",
         connect="Enable player connection notifications (True/False)",
         disconnect="Enable player disconnection notifications (True/False)"
     )
@@ -883,7 +883,7 @@ class Events(commands.Cog):
     
     @events.command(name="suicide_config", description="Configure suicide notifications")
     @app_commands.describe(
-        server_id="Select a server to configure",
+        server_id="Select a server by name to configure",
         menu="Enable menu suicide notifications (True/False)",
         fall="Enable fall damage suicide notifications (True/False)",
         other="Enable other suicide notifications (True/False)"

@@ -24,7 +24,7 @@ SERVER_CACHE = {}
 SERVER_CACHE_TIMEOUT = 300  # 5 minutes
 
 async def server_id_autocomplete(interaction, current):
-    """Autocomplete for server IDs"""
+    """Autocomplete for server selection by name, returns server_id as value"""
     try:
         # Get user's guild ID
         guild_id = interaction.guild_id
@@ -67,13 +67,18 @@ async def server_id_autocomplete(interaction, current):
         choices = []
         for server in servers:
             server_id = server.get("server_id", "")
-            server_name = server.get("name", "Unknown")
-            display_name = f"server:{server_name}"
+            # Get proper server name, check both keys: 'name' and 'server_name'
+            server_name = server.get("server_name", server.get("name", "Unknown"))
             
-            if current.lower() in display_name.lower() or current.lower() in server_id.lower():
-                # Format: "server:MyServerName" (ServerID)
+            # Make sure we have a valid display name
+            if server_name == "Unknown" and server_id:
+                server_name = f"Server {server_id}"
+            
+            # Check if current input matches server name or ID
+            if current.lower() in server_name.lower() or current.lower() in server_id.lower():
+                # Format: "ServerName (ServerID)"
                 choices.append(app_commands.Choice(
-                    name=f"{display_name} ({server_id})",
+                    name=f"{server_name} ({server_id})",
                     value=server_id
                 ))
         
@@ -338,7 +343,7 @@ class Setup(commands.Cog):
             await ctx.send(embed=embed)
     
     @setup.command(name="removeserver", description="Remove a server")
-    @app_commands.describe(server_id="Select a server to remove")
+    @app_commands.describe(server_id="Select a server by name to remove")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def remove_server(self, ctx, server_id: str):
         """Remove a server from tracking"""
@@ -493,7 +498,7 @@ class Setup(commands.Cog):
     
     @setup.command(name="channels", description="Configure notification channels for a server")
     @app_commands.describe(
-        server_id="Select a server to configure",
+        server_id="Select a server by name to configure",
         killfeed_channel="Channel for killfeed notifications",
         events_channel="Channel for event notifications",
         connections_channel="Channel for player connection notifications",
@@ -819,7 +824,7 @@ class Setup(commands.Cog):
             await ctx.send(embed=embed)
     
     @setup.command(name="historicalparse", description="Parse all historical data for a server")
-    @app_commands.describe(server_id="Select a server to parse historical data for")
+    @app_commands.describe(server_id="Select a server by name to parse historical data for")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def historical_parse(self, ctx, server_id: str):
         """Parse all historical data for a server"""
