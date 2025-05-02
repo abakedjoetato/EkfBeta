@@ -21,6 +21,16 @@ logger = logging.getLogger(__name__)
 async def server_id_autocomplete(interaction, current):
     """Autocomplete for server IDs"""
     try:
+        # Get guild model for themed embed
+        guild_data = None
+        guild_model = None
+        try:
+            guild_data = await interaction.client.db.guilds.find_one({"guild_id": interaction.guild_id})
+            if guild_data:
+                guild_model = Guild(interaction.client.db, guild_data)
+        except Exception as e:
+            logger.warning(f"Error getting guild model: {e}")
+
         # Get user's guild ID
         guild_id = interaction.guild_id
         
@@ -176,7 +186,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -186,7 +196,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Player statistics is a premium feature. Please upgrade to access this feature."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -203,7 +213,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -214,7 +224,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Player Not Found",
                     f"Player '{player_name}' not found on server {server_name}."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -591,7 +601,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting player stats: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @stats.command(name="server", description="View server statistics")
@@ -599,14 +609,32 @@ class Stats(commands.Cog):
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def server_stats(self, ctx, server_id: str):
         """View statistics for a server"""
+        
+    try:
+
+        # Get guild model for themed embed
+
+        guild_data = None
+
+        guild_model = None
+
         try:
+
+        guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+
+        if guild_data:
+
+        guild_model = Guild(self.bot.db, guild_data)
+        except Exception as e:
+            logger.warning(f"Error getting guild model: {e}")
+
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
             if not guild_data:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -616,7 +644,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Server statistics is a premium feature. Please upgrade to access this feature."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -631,7 +659,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -676,7 +704,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting server stats: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @stats.command(name="leaderboard", description="View player leaderboards")
@@ -696,7 +724,25 @@ class Stats(commands.Cog):
     ])
     async def leaderboard(self, ctx, server_id: str, stat: str, limit: int = 10):
         """View leaderboards for a specific stat"""
+        
+    try:
+
+        # Get guild model for themed embed
+
+        guild_data = None
+
+        guild_model = None
+
         try:
+
+        guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+
+        if guild_data:
+
+        guild_model = Guild(self.bot.db, guild_data)
+        except Exception as e:
+            logger.warning(f"Error getting guild model: {e}")
+
             # Validate limit
             if limit < 1:
                 limit = 10
@@ -709,7 +755,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -719,7 +765,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Leaderboards are a premium feature. Please upgrade to access this feature."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -736,7 +782,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -747,7 +793,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "No Data",
                     f"No player data found for '{stat}' on server {server_name}."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -767,7 +813,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 f"🏆 {stat_display} Leaderboard",
                 f"Top {len(leaderboard_data)} players on {server_name}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             
             # Add leaderboard entries
             value_suffix = "m" if stat == "longest_shot" else ""
@@ -787,7 +833,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting the leaderboard: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @stats.command(name="weapon_categories", description="View statistics by weapon category")
@@ -797,14 +843,32 @@ class Stats(commands.Cog):
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def weapon_categories(self, ctx, server_id: str):
         """View statistics by weapon category"""
+        
+    try:
+
+        # Get guild model for themed embed
+
+        guild_data = None
+
+        guild_model = None
+
         try:
+
+        guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+
+        if guild_data:
+
+        guild_model = Guild(self.bot.db, guild_data)
+        except Exception as e:
+            logger.warning(f"Error getting guild model: {e}")
+
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
             if not guild_data:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -814,7 +878,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Weapon category statistics is a premium feature. Please upgrade to access this feature."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -831,7 +895,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     f"Server {server_id} not found. Please check your server ID."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -861,7 +925,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "No Data",
                     f"No weapon data found for server {server_name}."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
                 
@@ -883,7 +947,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 f"📊 Weapon Category Stats",
                 f"Weapon category breakdown on {server_name}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             
             # Add total kills
             embed.add_field(name="Total Kills", value=str(total_kills), inline=False)
@@ -921,7 +985,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting weapon category stats: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
             
     @stats.command(name="weapon", description="View weapon statistics")
@@ -932,14 +996,32 @@ class Stats(commands.Cog):
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def weapon_stats(self, ctx, server_id: str, weapon_name: str):
         """View statistics for a specific weapon"""
+        
+    try:
+
+        # Get guild model for themed embed
+
+        guild_data = None
+
+        guild_model = None
+
         try:
+
+        guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+
+        if guild_data:
+
+        guild_model = Guild(self.bot.db, guild_data)
+        except Exception as e:
+            logger.warning(f"Error getting guild model: {e}")
+
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
             if not guild_data:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -949,7 +1031,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Weapon statistics is a premium feature. Please upgrade to access this feature."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -966,7 +1048,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -1007,7 +1089,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "No Data",
                     f"No data found for weapons matching '{weapon_name}' on server {server_name}."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -1054,7 +1136,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_base_embed(
                     f"🔫 {weapon_name} Stats",
                     f"Weapon statistics on {server_name}"
-                , guild=ctx.guild)
+                , guild=guild_model)
                 
                 # Add basic stats
                 embed.add_field(name="Weapon Type", value=weapon_details.get("type", weapon_category.title()), inline=True)
@@ -1129,7 +1211,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting weapon stats: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
 
 

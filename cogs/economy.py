@@ -20,6 +20,16 @@ logger = logging.getLogger(__name__)
 async def server_id_autocomplete(interaction, current):
     """Autocomplete for server IDs"""
     try:
+        # Get guild model for themed embed
+        guild_data = None
+        guild_model = None
+        try:
+            guild_data = await interaction.client.db.guilds.find_one({"guild_id": interaction.guild_id})
+            if guild_data:
+                guild_model = Guild(interaction.client.db, guild_data)
+        except Exception as e:
+            logger.warning(f"Error getting guild model: {e}")
+
         # Get user's guild ID
         guild_id = interaction.guild_id
         
@@ -94,7 +104,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -104,7 +114,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Economy features are premium features. Please upgrade to access this feature."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -121,7 +131,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -185,7 +195,7 @@ class Economy(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting your balance: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @economy.command(name="daily", description="Claim your daily reward")
@@ -194,13 +204,23 @@ class Economy(commands.Cog):
     async def daily(self, ctx, server_id: str):
         """Claim your daily reward"""
         try:
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
             if not guild_data:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -210,7 +230,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Economy features are premium features. Please upgrade to access this feature."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -227,7 +247,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -274,7 +294,7 @@ class Economy(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while claiming your daily reward: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @economy.command(name="leaderboard", description="View the richest players")
@@ -283,13 +303,23 @@ class Economy(commands.Cog):
     async def leaderboard(self, ctx, server_id: str):
         """View the richest players"""
         try:
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
             if not guild_data:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -299,7 +329,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Economy features are premium features. Please upgrade to access this feature."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -316,7 +346,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -327,7 +357,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "No Data",
                     f"No player economy data found for server {server_name}."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -357,7 +387,7 @@ class Economy(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting the leaderboard: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @commands.hybrid_group(name="gambling", description="Gambling commands")
@@ -376,13 +406,23 @@ class Economy(commands.Cog):
     async def blackjack(self, ctx, server_id: str, bet: int = 10):
         """Play blackjack"""
         try:
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
             if not guild_data:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -392,7 +432,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Gambling features are premium features. Please upgrade to access this feature."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -409,7 +449,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -418,7 +458,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Invalid Bet",
                     "Bet must be greater than 0."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -436,7 +476,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Insufficient Funds",
                     f"You don't have enough credits. You need {bet} credits to play."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -485,7 +525,7 @@ class Economy(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while playing blackjack: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @gambling.command(name="slots", description="Play slots")
@@ -497,13 +537,23 @@ class Economy(commands.Cog):
     async def slots(self, ctx, server_id: str, bet: int = 10):
         """Play slots"""
         try:
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
             if not guild_data:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -513,7 +563,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Gambling features are premium features. Please upgrade to access this feature."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -530,7 +580,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -539,7 +589,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Invalid Bet",
                     "Bet must be greater than 0."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -557,7 +607,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Insufficient Funds",
                     f"You don't have enough credits. You need {bet} credits to play."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -584,7 +634,7 @@ class Economy(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while playing slots: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @economy.command(name="give", description="Give credits to another player")
@@ -597,13 +647,23 @@ class Economy(commands.Cog):
     async def give(self, ctx, server_id: str, user: discord.Member, amount: int):
         """Give credits to another player"""
         try:
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
             if not guild_data:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -613,7 +673,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Economy features are premium features. Please upgrade to access this feature."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -630,7 +690,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -639,7 +699,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Invalid Amount",
                     "Amount must be greater than 0."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -648,7 +708,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Invalid Recipient",
                     "You can't give credits to yourself."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -666,7 +726,7 @@ class Economy(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Insufficient Funds",
                     f"You don't have enough credits. You have {balance} credits."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -700,7 +760,7 @@ class Economy(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while giving credits: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
 
 async def setup(bot):

@@ -33,6 +33,16 @@ class Admin(commands.Cog):
     async def setrole(self, ctx, role: discord.Role):
         """Set the admin role for server management"""
         try:
+        # Get guild model for themed embed
+        guild_data = None
+        guild_model = None
+        try:
+            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+            if guild_data:
+                guild_model = Guild(self.bot.db, guild_data)
+        except Exception as e:
+            logger.warning(f"Error getting guild model: {e}")
+
             # Get guild data
             guild = await Guild.get_by_id(self.bot.db, ctx.guild.id)
             if not guild:
@@ -45,7 +55,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Admin Role Set",
                 f"The {role.mention} role has been set as the admin role for server management."
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
             
         except Exception as e:
@@ -53,7 +63,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while setting the admin role: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @admin.command(name="premium", description="Set the premium tier for a guild")
@@ -63,13 +73,31 @@ class Admin(commands.Cog):
     )
     async def premium(self, ctx, guild_id: str, tier: int):
         """Set the premium tier for a guild (Home Guild Admins only)"""
+        
         try:
+
+            # Get guild model for themed embed
+
+            guild_data = None
+
+            guild_model = None
+
+            try:
+
+            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+
+            if guild_data:
+
+            guild_model = Guild(self.bot.db, guild_data)
+        except Exception as e:
+            logger.warning(f"Error getting guild model: {e}")
+
             # Check if user is a home guild admin
             if not is_home_guild_admin(self.bot, ctx.author.id):
                 embed = EmbedBuilder.create_error_embed(
                     "Permission Denied",
                     "Only home guild administrators can use this command."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed, ephemeral=True)
                 return
             
@@ -78,7 +106,7 @@ class Admin(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Invalid Tier",
                     "Premium tier must be between 0 and 3."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -89,7 +117,7 @@ class Admin(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Invalid Guild ID",
                     "Guild ID must be a valid integer."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -99,7 +127,7 @@ class Admin(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Guild Not Found",
                     f"Could not find a guild with ID {guild_id}."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -114,7 +142,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Premium Tier Set",
                 f"The premium tier for {guild_name} has been set to **Tier {tier}**."
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
             
         except Exception as e:
@@ -122,13 +150,31 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while setting the premium tier: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @admin.command(name="status", description="View bot status information")
     async def status(self, ctx):
         """View bot status information"""
+        
         try:
+
+            # Get guild model for themed embed
+
+            guild_data = None
+
+            guild_model = None
+
+            try:
+
+            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+
+            if guild_data:
+
+            guild_model = Guild(self.bot.db, guild_data)
+        except Exception as e:
+            logger.warning(f"Error getting guild model: {e}")
+
             # Get basic statistics
             guild_count = len(self.bot.guilds)
             
@@ -152,7 +198,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Bot Status",
                 "Current statistics and performance information"
-            , guild=ctx.guild)
+            , guild=guild_model)
             
             # Add statistics fields
             embed.add_field(name="Guilds", value=str(guild_count), inline=True)
@@ -184,19 +230,37 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting bot status: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @admin.command(name="sethomeguild", description="Set the home guild for the bot")
     async def sethomeguild(self, ctx):
         """Set the current guild as the home guild (Bot Owner only)"""
+        
         try:
+
+            # Get guild model for themed embed
+
+            guild_data = None
+
+            guild_model = None
+
+            try:
+
+            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+
+            if guild_data:
+
+            guild_model = Guild(self.bot.db, guild_data)
+        except Exception as e:
+            logger.warning(f"Error getting guild model: {e}")
+
             # Check if user is the bot owner
             if ctx.author.id != self.bot.owner_id:
                 embed = EmbedBuilder.create_error_embed(
                     "Permission Denied",
                     "Only the bot owner can use this command."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed, ephemeral=True)
                 return
             
@@ -210,7 +274,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Home Guild Set",
                 f"This guild ({ctx.guild.name}) has been set as the home guild for the bot."
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
             
             logger.info(f"Home guild set to {ctx.guild.name} (ID: {ctx.guild.id}) by owner")
@@ -220,7 +284,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while setting the home guild: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
             
 
@@ -231,7 +295,7 @@ class Admin(commands.Cog):
         embed = EmbedBuilder.create_base_embed(
             "Admin Commands Help",
             "List of available admin commands and their usage"
-        , guild=ctx.guild)
+        , guild=guild_model)
         
         # Add command descriptions
         embed.add_field(

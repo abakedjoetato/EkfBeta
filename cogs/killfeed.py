@@ -37,6 +37,16 @@ class Killfeed(commands.Cog):
     async def start(self, ctx, server_id: str):
         """Start the killfeed monitor for a server"""
         try:
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+
             # Check permissions
             if not await self._check_permission(ctx):
                 return
@@ -47,7 +57,7 @@ class Killfeed(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -62,7 +72,7 @@ class Killfeed(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     f"Server with ID {server_id} not found in this guild."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -78,7 +88,7 @@ class Killfeed(commands.Cog):
                     embed = EmbedBuilder.create_error_embed(
                         "Already Running",
                         f"Killfeed monitor for server {server_id} is already running."
-                    , guild=ctx.guild)
+                    , guild=guild_model)
                     await ctx.send(embed=embed)
                     return
             
@@ -86,7 +96,7 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Starting Killfeed Monitor",
                 f"Starting killfeed monitor for server {server_id}..."
-            , guild=ctx.guild)
+            , guild=guild_model)
             message = await ctx.send(embed=embed)
             
             # Start the task
@@ -107,7 +117,7 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Killfeed Monitor Started",
                 f"Killfeed monitor for server {server_id} has been started successfully."
-            , guild=ctx.guild)
+            , guild=guild_model)
             await message.edit(embed=embed)
             
         except Exception as e:
@@ -115,14 +125,25 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while starting the killfeed monitor: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @killfeed.command(name="stop", description="Stop monitoring killfeed for a server")
     @app_commands.describe(server_id="The ID of the server to stop monitoring")
     async def stop(self, ctx, server_id: str):
         """Stop the killfeed monitor for a server"""
+        
         try:
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+
             # Check permissions
             if not await self._check_permission(ctx):
                 return
@@ -133,7 +154,7 @@ class Killfeed(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Not Running",
                     f"Killfeed monitor for server {server_id} is not running."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -148,7 +169,7 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Killfeed Monitor Stopped",
                 f"Killfeed monitor for server {server_id} has been stopped successfully."
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
             
         except Exception as e:
@@ -156,20 +177,31 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while stopping the killfeed monitor: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     @killfeed.command(name="status", description="Check killfeed monitor status")
     async def status(self, ctx):
         """Check the status of killfeed monitors for this guild"""
+        
         try:
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
             if not guild_data:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
             
@@ -199,7 +231,7 @@ class Killfeed(commands.Cog):
                 embed = EmbedBuilder.create_base_embed(
                     "Killfeed Monitor Status",
                     f"Currently running killfeed monitors for {ctx.guild.name}"
-                , guild=ctx.guild)
+                , guild=guild_model)
                 
                 for monitor in running_monitors:
                     embed.add_field(
@@ -211,7 +243,7 @@ class Killfeed(commands.Cog):
                 embed = EmbedBuilder.create_base_embed(
                     "Killfeed Monitor Status",
                     f"No killfeed monitors are currently running for {ctx.guild.name}."
-                , guild=ctx.guild)
+                , guild=guild_model)
                 
                 # Add instructions
                 embed.add_field(
@@ -227,7 +259,7 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while checking killfeed status: {e}"
-            , guild=ctx.guild)
+            , guild=guild_model)
             await ctx.send(embed=embed)
     
     async def _check_permission(self, ctx) -> bool:
