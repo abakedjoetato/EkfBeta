@@ -1127,20 +1127,33 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
                 # Get last processed line number
                 last_line = server.last_log_line
                 
-                # Get total lines in the file
-                total_lines = await sftp_client.get_file_size(log_file)
-                
-                # If no new lines, sleep and continue
-                if total_lines <= last_line:
+                # Get total lines in the file with timeout protection
+                try:
+                    total_lines = await sftp_client.get_file_size(
+                        log_file,
+                        chunk_size=5000  # Use a reasonable chunk size for better performance
+                    )
+                    
+                    # If no new lines, sleep and continue
+                    if total_lines <= last_line:
+                        await asyncio.sleep(EVENTS_REFRESH_INTERVAL)
+                        continue
+                        
+                    # Read new lines with timeout protection
+                    new_lines = await sftp_client.read_file(
+                        log_file, 
+                        start_line=last_line,
+                        max_lines=None,  # Read all new lines
+                        chunk_size=1000  # Process in smaller chunks to prevent timeout
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout reading log data for {server_id}, will retry")
+                    # Reconnect after timeout
+                    await sftp_client.disconnect()
+                    await asyncio.sleep(1)
+                    await sftp_client.connect()
                     await asyncio.sleep(EVENTS_REFRESH_INTERVAL)
                     continue
-                
-                # Read new lines
-                new_lines = await sftp_client.read_file(
-                    log_file, 
-                    start_line=last_line,
-                    max_lines=None  # Read all new lines
-                )
                 
                 if not new_lines:
                     await asyncio.sleep(EVENTS_REFRESH_INTERVAL)

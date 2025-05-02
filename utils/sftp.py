@@ -510,49 +510,181 @@ class SFTPClient:
             logger.error(f"Error searching for {LOG_FILENAME}: {e}")
             return None
     
-    async def read_file(self, file_path, start_line=0, max_lines=None):
-        """Read a file from the SFTP server"""
+    async def read_file(self, file_path, start_line=0, max_lines=None, chunk_size=1000):
+        """Read a file from the SFTP server with timeout protection
+        
+        Args:
+            file_path: Path to the file to read
+            start_line: First line to read (0-indexed)
+            max_lines: Maximum number of lines to read
+            chunk_size: Number of lines to read in each chunk (to prevent timeout)
+            
+        Returns:
+            List of lines read from the file
+        """
         if not self.connected:
             await self.connect()
         if not self.connected:
             return []
         
         try:
-            with self.sftp.file(file_path, 'r') as f:
-                # Skip lines if start_line > 0
-                for _ in range(start_line):
-                    next(f, None)
-                
-                # Read lines
-                lines = []
-                line_count = 0
-                for line in f:
-                    lines.append(line.strip())
-                    line_count += 1
-                    if max_lines and line_count >= max_lines:
+            # Create a new task with timeout to prevent event loop blocking
+            async def read_chunk(start, max_count):
+                try:
+                    # We'll create a new file handle for each chunk to avoid timeout issues
+                    with self.sftp.file(file_path, 'r') as chunk_file:
+                        # Skip to the starting position
+                        for _ in range(start):
+                            next(chunk_file, None)
+                            
+                        # Read the requested chunk
+                        chunk_lines = []
+                        count = 0
+                        
+                        # Use a separate thread for potentially blocking IO
+                        # and add a timeout to prevent blocking the event loop
+                        return await asyncio.wait_for(
+                            asyncio.to_thread(self._read_chunk, chunk_file, max_count),
+                            timeout=5.0  # 5 second timeout
+                        )
+                        
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout reading file {file_path} at position {start}")
+                    # Try to reconnect on timeout
+                    await self.disconnect()
+                    await asyncio.sleep(1)
+                    await self.connect()
+                    return []
+                except Exception as e:
+                    logger.error(f"Error reading chunk at position {start}: {e}")
+                    return []
+            
+            all_lines = []
+            current_position = start_line
+            remaining_lines = max_lines
+            
+            while True:
+                # Determine how many lines to read in this chunk
+                current_chunk_size = chunk_size
+                if remaining_lines is not None:
+                    if remaining_lines <= 0:
                         break
+                    current_chunk_size = min(chunk_size, remaining_lines)
                 
-                return lines
+                # Read the next chunk with timeout protection
+                chunk_data = await read_chunk(current_position, current_chunk_size)
+                
+                # Break if we got no data (end of file or error)
+                if not chunk_data:
+                    break
+                    
+                # Update our tracking variables
+                all_lines.extend([line.strip() for line in chunk_data])
+                chunk_line_count = len(chunk_data)
+                current_position += chunk_line_count
+                
+                if remaining_lines is not None:
+                    remaining_lines -= chunk_line_count
+                    
+                # If we got fewer lines than requested, we've reached the end of the file
+                if chunk_line_count < current_chunk_size:
+                    break
+                    
+                # Add a small delay to prevent overloading the event loop
+                await asyncio.sleep(0.01)
+            
+            return all_lines
                 
         except Exception as e:
             logger.error(f"Error reading file {file_path}: {e}", exc_info=True)
+            # Try to reconnect after an error
+            await self.disconnect()
+            await asyncio.sleep(1)
+            await self.connect()
+            return []
+            
+    def _read_chunk(self, file_obj, max_lines):
+        """Read a chunk of lines from a file (runs in a separate thread)
+        
+        Args:
+            file_obj: Open file object
+            max_lines: Maximum number of lines to read
+            
+        Returns:
+            List of lines read
+        """
+        try:
+            lines = []
+            for _ in range(max_lines):
+                try:
+                    line = next(file_obj)
+                    lines.append(line)
+                except StopIteration:
+                    break
+            return lines
+        except Exception as e:
+            logger.error(f"Error in _read_chunk: {e}")
             return []
     
-    async def get_file_size(self, file_path):
-        """Get the size of a file in lines"""
+    async def get_file_size(self, file_path, chunk_size=5000):
+        """Get the size of a file in lines with timeout protection
+        
+        Args:
+            file_path: Path to the file
+            chunk_size: Number of lines to count in each chunk (to prevent timeout)
+            
+        Returns:
+            Number of lines in the file
+        """
         if not self.connected:
             await self.connect()
         if not self.connected:
             return 0
         
         try:
-            with self.sftp.file(file_path, 'r') as f:
-                # Count lines
-                line_count = sum(1 for _ in f)
-                return line_count
+            # Use chunked reading to count lines and avoid timeout
+            total_lines = 0
+            current_position = 0
+            
+            # Use the read_file method that already has timeout protection
+            while True:
+                # Read a chunk of lines
+                chunk_lines = await self.read_file(
+                    file_path,
+                    start_line=current_position,
+                    max_lines=chunk_size,
+                    chunk_size=1000  # Smaller inner chunks for better timeout handling
+                )
+                
+                # If no lines were read, we've reached the end of the file
+                if not chunk_lines:
+                    break
+                    
+                # Update position and count
+                chunk_count = len(chunk_lines)
+                total_lines += chunk_count
+                current_position += chunk_count
+                
+                # If we read fewer lines than requested, we're at the end of the file
+                if chunk_count < chunk_size:
+                    break
+                    
+                # Add a small delay to let the event loop handle other tasks
+                await asyncio.sleep(0.01)
+                
+                # Log progress for large files
+                if total_lines % 50000 == 0:
+                    logger.info(f"Counted {total_lines} lines in {file_path} so far...")
+            
+            logger.info(f"File {file_path} has {total_lines} lines")
+            return total_lines
                 
         except Exception as e:
-            logger.error(f"Error getting file size {file_path}: {e}", exc_info=True)
+            logger.error(f"Error getting file size for {file_path}: {e}", exc_info=True)
+            # Try to reconnect after an error
+            await self.disconnect()
+            await asyncio.sleep(1)
+            await self.connect()
             return 0
     
     @staticmethod
