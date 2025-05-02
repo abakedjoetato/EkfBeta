@@ -51,7 +51,7 @@ class Economy:
         
         return cls(db, player_data)
     
-    async def add_currency(self, amount: int, source: str, details: Dict[str, Any] = None) -> int:
+    async def add_currency(self, amount: int, source: str, details: Optional[Dict[str, Any]] = None) -> int:
         """Add currency to player account and record transaction"""
         if amount <= 0:
             return self.currency
@@ -87,7 +87,7 @@ class Economy:
         
         return self.currency
     
-    async def remove_currency(self, amount: int, reason: str, details: Dict[str, Any] = None) -> bool:
+    async def remove_currency(self, amount: int, reason: str, details: Optional[Dict[str, Any]] = None) -> bool:
         """Remove currency from player account and record transaction"""
         if amount <= 0 or amount > self.currency:
             return False
@@ -186,7 +186,7 @@ class Economy:
         
         return await cursor.to_list(length=None)
     
-    async def claim_daily(self, amount: int = 100) -> (bool, str):
+    async def claim_daily(self, amount: int = 100) -> tuple[bool, str]:
         """Claim daily reward"""
         now = datetime.utcnow()
         
@@ -216,3 +216,61 @@ class Economy:
             return True, f"You claimed your daily reward of {amount} credits!"
         
         return False, "Failed to claim daily reward. Please try again."
+    
+    async def earn_interest(self, interest_rate: float = 0.01) -> int:
+        """Earn interest on current balance
+        
+        Args:
+            interest_rate: Interest rate as a decimal (default 0.01 or 1%)
+            
+        Returns:
+            Amount of interest earned
+        """
+        if self.currency <= 0:
+            return 0
+        
+        # Calculate interest (rounded down to nearest integer)
+        interest_amount = int(self.currency * interest_rate)
+        
+        # Minimum interest of 1 credit if player has any balance
+        if self.currency > 0 and interest_amount < 1:
+            interest_amount = 1
+        
+        # Add interest as currency
+        if interest_amount > 0:
+            await self.add_currency(interest_amount, "interest", {
+                "rate": interest_rate,
+                "principal": self.currency
+            })
+            
+        return interest_amount
+    
+    @classmethod
+    async def pay_interest_to_all(cls, db, server_id: str, interest_rate: float = 0.01) -> tuple[int, int]:
+        """Pay interest to all players on a server
+        
+        Args:
+            db: Database connection
+            server_id: Server ID
+            interest_rate: Interest rate as a decimal (default 0.01 or 1%)
+            
+        Returns:
+            Tuple of (players_paid, total_interest)
+        """
+        # Find all players with currency > 0
+        cursor = db.players.find({
+            "server_id": server_id,
+            "currency": {"$gt": 0}
+        })
+        
+        players_paid = 0
+        total_interest = 0
+        
+        async for player_data in cursor:
+            economy = cls(db, player_data)
+            interest = await economy.earn_interest(interest_rate)
+            if interest > 0:
+                players_paid += 1
+                total_interest += interest
+        
+        return players_paid, total_interest

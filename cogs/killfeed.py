@@ -406,11 +406,87 @@ async def process_kill_event(bot, server, kill_event, channel):
         # Create embed for the kill
         embed = EmbedBuilder.create_kill_embed(kill_event)
         
-        # Send to channel
-        await channel.send(embed=embed)
+        # Get guild ID for the server to check premium features
+        guild_data = await bot.db.guilds.find_one({"servers.server_id": server.id})
+        has_economy = False
         
-        # Update player stats
+        if guild_data:
+            guild = Guild(bot.db, guild_data)
+            has_economy = guild.check_feature_access("economy")
+        
+        # Add economy notification placeholder if the guild has economy feature
+        if has_economy and not kill_event["is_suicide"]:
+            embed.add_field(
+                name="💰 Economy",
+                value="*Processing rewards...*",
+                inline=False
+            )
+        
+        # Send to channel
+        kill_message = await channel.send(embed=embed)
+        
+        # Update player stats and get economy results
         await update_player_stats(bot, server.id, kill_event)
+        
+        # Update the embed with economy info if applicable
+        if has_economy:
+            try:
+                if not kill_event["is_suicide"]:
+                    # Get killer's economy info
+                    from models.economy import Economy
+                    killer_id = kill_event["killer_id"]
+                    killer_economy = await Economy.get_by_player(bot.db, killer_id, server.id)
+                    
+                    if killer_economy:
+                        # Get reward info
+                        base_reward = 10
+                        distance = kill_event.get("distance", 0)
+                        
+                        if distance >= 100:
+                            base_reward += min(int(distance / 10), 50)  # Cap bonus at +50 credits
+                        
+                        # Get killer player for streak info
+                        killer = await Player.get_by_id(bot.db, killer_id, server.id)
+                        killstreak = killer.current_streak if killer else 0
+                        
+                        # Calculate streak bonus
+                        streak_bonus = 0
+                        if killstreak == 5:
+                            streak_bonus = 25
+                        elif killstreak == 10:
+                            streak_bonus = 50
+                        elif killstreak == 15:
+                            streak_bonus = 100
+                        elif killstreak == 20:
+                            streak_bonus = 200
+                        elif killstreak >= 25:
+                            streak_bonus = 300
+                        elif killstreak >= 3:
+                            streak_bonus = 15
+                        
+                        # Update the embed with economy info
+                        reward_text = f"+{base_reward} credits for kill"
+                        
+                        if distance >= 100:
+                            reward_text += f"\n+{min(int(distance / 10), 50)} distance bonus"
+                        
+                        if streak_bonus > 0:
+                            reward_text += f"\n+{streak_bonus} killstreak bonus (x{killstreak})"
+                            
+                        reward_text += f"\nBalance: {await killer_economy.get_balance()} credits"
+                        
+                        # Update the embed
+                        embed.set_field_at(
+                            index=embed.fields.index([f for f in embed.fields if f.name == "💰 Economy"][0]),
+                            name="💰 Economy",
+                            value=reward_text,
+                            inline=False
+                        )
+                        
+                        # Update the message
+                        await kill_message.edit(embed=embed)
+            except Exception as e:
+                logger.error(f"Error updating economy info in embed: {e}", exc_info=True)
         
     except Exception as e:
         logger.error(f"Error processing kill event: {e}", exc_info=True)
@@ -437,9 +513,27 @@ async def update_player_stats(bot, server_id, kill_event):
         }
         victim = await Player.create_or_update(bot.db, victim_data)
         
+        # Get guild data for the server to check premium features
+        guild_data = await bot.db.guilds.find_one({"servers.server_id": server_id})
+        if guild_data:
+            guild = Guild(bot.db, guild_data)
+            has_economy = guild.check_feature_access("economy")
+        else:
+            has_economy = False
+        
         # Handle suicide case
         if kill_event["is_suicide"]:
             await victim.record_suicide(kill_event["suicide_type"])
+            
+            # Economy penalty for suicide if enabled
+            if has_economy:
+                from models.economy import Economy
+                victim_economy = await Economy.get_by_player(bot.db, victim.id, server_id)
+                if victim_economy:
+                    # Small penalty for suicide
+                    await victim_economy.remove_currency(5, "suicide_penalty", {
+                        "suicide_type": kill_event.get("suicide_type", "unknown")
+                    })
         else:
             # Record kill for killer
             await killer.record_kill(
@@ -454,6 +548,66 @@ async def update_player_stats(bot, server_id, kill_event):
                 killer_id=killer.id,
                 killer_name=killer.name
             )
+            
+            # Award currency for kill if economy feature is enabled
+            if has_economy:
+                from models.economy import Economy
+                
+                # Get or create economy data for killer
+                killer_economy = await Economy.get_by_player(bot.db, killer.id, server_id)
+                if not killer_economy:
+                    killer_economy = await Economy.create_or_update(bot.db, killer.id, server_id)
+                
+                # Base reward amount
+                reward_amount = 10
+                
+                # Bonus for long-distance kills
+                distance = kill_event.get("distance", 0)
+                if distance >= 100:
+                    reward_amount += min(int(distance / 10), 50)  # Cap bonus at +50 credits
+                
+                # Bonus for killstreaks
+                if killer.current_streak > 1:
+                    killstreak = killer.current_streak
+                    
+                    # Escalating rewards for killstreaks
+                    if killstreak == 5:
+                        streak_bonus = 25
+                        streak_type = "killstreak_5"
+                    elif killstreak == 10:
+                        streak_bonus = 50
+                        streak_type = "killstreak_10"
+                    elif killstreak == 15:
+                        streak_bonus = 100
+                        streak_type = "killstreak_15"
+                    elif killstreak == 20:
+                        streak_bonus = 200
+                        streak_type = "killstreak_20"
+                    elif killstreak >= 25:
+                        streak_bonus = 300
+                        streak_type = "killstreak_25_plus"
+                    elif killstreak >= 3:
+                        streak_bonus = 15
+                        streak_type = "killstreak_3"
+                    else:
+                        streak_bonus = 0
+                        streak_type = None
+                    
+                    # If there's a streak bonus, award it separately
+                    if streak_bonus > 0 and streak_type:
+                        await killer_economy.add_currency(streak_bonus, streak_type, {
+                            "killstreak": killstreak,
+                            "victim_id": victim.id,
+                            "victim_name": victim.name
+                        })
+                
+                # Award base currency with kill details
+                await killer_economy.add_currency(reward_amount, "kill_reward", {
+                    "victim_id": victim.id,
+                    "victim_name": victim.name,
+                    "weapon": kill_event.get("weapon", "unknown"),
+                    "distance": distance
+                })
         
     except Exception as e:
         logger.error(f"Error updating player stats: {e}", exc_info=True)

@@ -85,6 +85,20 @@ async def create_collections_and_indexes(db):
             ("timestamp", 1)
         ])
         
+        # Economy collection indexes
+        await db[COLLECTIONS["economy"]].create_index([
+            ("server_id", 1),
+            ("player_id", 1)
+        ], unique=True)
+        
+        # Transactions collection indexes
+        await db[COLLECTIONS["transactions"]].create_index([
+            ("server_id", 1),
+            ("player_id", 1),
+            ("timestamp", 1)
+        ])
+        await db[COLLECTIONS["transactions"]].create_index("source")
+        
         logger.info("Created all necessary indexes")
     except Exception as e:
         logger.error(f"Error creating collections or indexes: {e}", exc_info=True)

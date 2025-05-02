@@ -8,6 +8,7 @@ from discord.ext import commands
 from discord import app_commands
 from typing import Dict, List, Any, Optional
 import asyncio
+from datetime import datetime
 
 from models.guild import Guild
 from models.server import Server
@@ -358,6 +359,7 @@ class Setup(commands.Cog):
         killfeed_channel="Channel for killfeed notifications",
         events_channel="Channel for event notifications",
         connections_channel="Channel for player connection notifications",
+        economy_channel="Channel for economy notifications (premium tier 2+)",
         voice_status_channel="Voice channel to update with player count"
     )
     async def setup_channels(self, ctx, 
@@ -365,6 +367,7 @@ class Setup(commands.Cog):
                             killfeed_channel: discord.TextChannel = None,
                             events_channel: discord.TextChannel = None,
                             connections_channel: discord.TextChannel = None,
+                            economy_channel: discord.TextChannel = None,
                             voice_status_channel: discord.VoiceChannel = None):
         """Configure notification channels for a server"""
         try:
@@ -429,6 +432,20 @@ class Setup(commands.Cog):
             if voice_status_channel:
                 update_data["voice_status_channel_id"] = voice_status_channel.id
                 update_desc.append(f"Voice Status Channel: {voice_status_channel.mention}")
+                
+            # Update economy channel (premium tier 2+ feature)
+            if economy_channel:
+                # Check if guild has economy feature (tier 2+)
+                if not guild.check_feature_access("economy"):
+                    embed = EmbedBuilder.create_error_embed(
+                        "Premium Feature",
+                        "Economy features require Premium Tier 2 or higher. Please upgrade to access these features."
+                    )
+                    await ctx.send(embed=embed)
+                    return
+                    
+                update_data["economy_channel_id"] = economy_channel.id
+                update_desc.append(f"Economy Channel: {economy_channel.mention}")
             
             # Check if any updates were provided
             if not update_data:
@@ -504,6 +521,7 @@ class Setup(commands.Cog):
                 killfeed_channel = None
                 events_channel = None
                 connections_channel = None
+                economy_channel = None
                 voice_channel = None
                 
                 if "killfeed_channel_id" in server:
@@ -517,6 +535,10 @@ class Setup(commands.Cog):
                 if "connections_channel_id" in server:
                     channel = ctx.guild.get_channel(server["connections_channel_id"])
                     connections_channel = channel.mention if channel else "Not found"
+                    
+                if "economy_channel_id" in server:
+                    channel = ctx.guild.get_channel(server["economy_channel_id"])
+                    economy_channel = channel.mention if channel else "Not found"
                 
                 if "voice_status_channel_id" in server:
                     channel = ctx.guild.get_channel(server["voice_status_channel_id"])
@@ -542,6 +564,9 @@ class Setup(commands.Cog):
                 
                 if connections_channel:
                     field_value.append(f"Connections: {connections_channel}")
+                    
+                if economy_channel:
+                    field_value.append(f"Economy: {economy_channel}")
                 
                 if voice_channel:
                     field_value.append(f"Voice Status: {voice_channel}")
@@ -574,10 +599,44 @@ class Setup(commands.Cog):
             tier = guild.premium_tier
             max_servers = guild.get_max_servers()
             
+            # Get available features
+            features = guild.get_available_features()
+            
+            # Format features with emoji indicators
+            feature_list = []
+            feature_list.append(f"{'✅' if 'killfeed' in features else '❌'} Killfeed")
+            feature_list.append(f"{'✅' if 'events' in features else '❌'} Events")
+            feature_list.append(f"{'✅' if 'connections' in features else '❌'} Connections")
+            feature_list.append(f"{'✅' if 'stats' in features else '❌'} Stats")
+            feature_list.append(f"{'✅' if 'economy' in features else '❌'} Economy")
+            feature_list.append(f"{'✅' if 'gambling' in features else '❌'} Gambling")
+            
+            # Format economy info if available
+            if 'economy' in features:
+                economy_info = []
+                if tier >= 2:
+                    economy_info.append("💰 Weekly Interest: Enabled")
+                else:
+                    economy_info.append("💰 Weekly Interest: Disabled (requires Tier 2+)")
+            else:
+                economy_info = ["💰 Economy features not available (requires Tier 1+)"]
+                
             embed.add_field(
                 name="Premium Status",
                 value=f"Tier: {tier}\nMax Servers: {max_servers}\nUsed: {len(servers)}/{max_servers}",
                 inline=False
+            )
+            
+            embed.add_field(
+                name="Available Features",
+                value="\n".join(feature_list),
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Economy Status",
+                value="\n".join(economy_info),
+                inline=True
             )
             
             await ctx.send(embed=embed)

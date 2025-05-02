@@ -126,10 +126,77 @@ async def load_extensions(bot):
         except Exception as e:
             logger.error(f"Failed to load extension {extension}: {e}", exc_info=True)
 
+async def pay_interest_task(bot):
+    """Background task to pay interest to all players weekly"""
+    try:
+        # Wait until the bot is ready
+        await bot.wait_until_ready()
+        
+        # Import the economy model
+        from models.economy import Economy
+        from models.guild import Guild
+        
+        logger.info("Started weekly interest payment task")
+        
+        while not bot.is_closed():
+            # Wait for 1 week (in seconds)
+            # For testing, you can reduce this to a smaller value
+            await asyncio.sleep(7 * 24 * 60 * 60)  # 7 days
+            
+            # Get all guilds with registered servers
+            cursor = bot.db.guilds.find({"servers": {"$exists": True, "$ne": []}})
+            
+            async for guild_doc in cursor:
+                guild_id = guild_doc["guild_id"]
+                guild = Guild(bot.db, guild_doc)
+                
+                # Only process guilds with premium tier 2+
+                if guild.premium_tier < 2:
+                    continue
+                
+                interest_rate = 0.01  # 1% interest
+                
+                # Process each server in the guild
+                for server in guild_doc["servers"]:
+                    server_id = server["server_id"]
+                    
+                    # Pay interest to all players
+                    players_paid, total_interest = await Economy.pay_interest_to_all(
+                        bot.db, server_id, interest_rate
+                    )
+                    
+                    if players_paid > 0:
+                        logger.info(
+                            f"Paid {total_interest} credits of interest to {players_paid} players "
+                            f"on server {server_id} (Guild: {guild_id})"
+                        )
+                        
+                        # Try to send a notification to the configured economy channel
+                        try:
+                            # Find the server's economy channel if set
+                            economy_channel_id = server.get("economy_channel_id")
+                            if economy_channel_id:
+                                channel = bot.get_channel(int(economy_channel_id))
+                                if channel:
+                                    await channel.send(
+                                        f"💰 **Weekly Interest Paid**\n"
+                                        f"Paid {total_interest} credits of interest to {players_paid} players\n"
+                                        f"Current interest rate: {interest_rate*100:.1f}%"
+                                    )
+                        except Exception as e:
+                            logger.error(f"Error sending interest notification: {e}")
+    
+    except Exception as e:
+        logger.error(f"Error in interest payment task: {e}", exc_info=True)
+
 async def setup_background_tasks(bot):
     """Set up background tasks for all registered servers"""
     # Get all guilds with registered servers
     cursor = bot.db.guilds.find({"servers": {"$exists": True, "$ne": []}})
+    
+    # Start weekly interest payment task (premium tier 2+ feature)
+    interest_task = asyncio.create_task(pay_interest_task(bot))
+    bot.background_tasks["interest_payment"] = interest_task
     
     async for guild_doc in cursor:
         guild_id = guild_doc["guild_id"]
