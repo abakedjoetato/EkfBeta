@@ -90,36 +90,100 @@ class SFTPClient:
             # Create patterns to try (both host_ pattern and IP_ pattern)
             patterns = [
                 f"{ip_address}_{self.server_id}",   # IP_serverID format (e.g., "79.127.236.1_7020")
-                f"host_{self.server_id}"            # Legacy host_serverID format
+                f"host_{self.server_id}",           # Legacy host_serverID format
+                f"{self.server_id}"                 # Server ID directly
             ]
             
             logger.info(f"Searching for directory patterns: {patterns}")
             
-            # Direct search in the root directory (no recursion)
+            # First try: Direct search in the root directory (no recursion)
             try:
                 items = self.sftp.listdir(current_path)
-                logger.info(f"Found {len(items)} items in root directory")
+                logger.info(f"Found {len(items)} items in root directory: {', '.join(items[:10])}{'...' if len(items) > 10 else ''}")
                 
                 for item in items:
                     # Check if the item name matches our patterns
+                    item_lower = item.lower()
                     for pattern in patterns:
-                        if pattern in item:
+                        if pattern.lower() in item_lower:
                             self.root_path = os.path.join(current_path, item)
                             logger.info(f"Found matching directory: {self.root_path}")
                             return
+                    
+                    # Also check for the server ID directly within the name
+                    if str(self.server_id) in item:
+                        self.root_path = os.path.join(current_path, item)
+                        logger.info(f"Found matching directory with server ID: {self.root_path}")
+                        return
             except Exception as dir_e:
                 logger.error(f"Error listing root directory: {dir_e}")
             
+            # Second try: Look for common directory structures
+            common_paths = [
+                f"./host_{self.server_id}",
+                f"./{ip_address}_{self.server_id}",
+                f"./server_{self.server_id}",
+                f"./gameserver_{self.server_id}",
+                f"./deadside_{self.server_id}"
+            ]
+            
+            for path in common_paths:
+                try:
+                    # Check if the path exists
+                    self.sftp.stat(path)
+                    self.root_path = path
+                    logger.info(f"Found server directory with common path: {self.root_path}")
+                    return
+                except Exception:
+                    # Continue to the next path
+                    pass
+            
+            # Third try: If still no match, fall back to recursive search (limited depth)
             if not self.root_path:
-                # If no match found, fall back to recursive search (limited depth)
+                logger.info("Attempting recursive search for server directory")
                 for pattern in patterns:
                     await self._find_path_recursive(current_path, pattern, max_depth=2)
                     if self.root_path:
                         logger.info(f"Found matching directory with recursive search: {self.root_path}")
                         return
             
+            # Last resort: Use first directory we find that might contain valid files
             if not self.root_path:
-                logger.warning(f"Could not find root path with any pattern {patterns}. Using current directory.")
+                # Try to find any directory that contains CSV files
+                logger.info("Last resort: searching for directories with CSV files")
+                try:
+                    for item in items:
+                        try:
+                            test_path = os.path.join(current_path, item)
+                            # Check if it's a directory
+                            if self._is_dir(test_path):
+                                # Try to find paths with CSV files
+                                potential_paths = [
+                                    test_path,
+                                    os.path.join(test_path, "actual1"),
+                                    os.path.join(test_path, "actual1", "deathlogs")
+                                ]
+                                
+                                for path in potential_paths:
+                                    try:
+                                        # Check if this path exists and has CSV files
+                                        path_items = self.sftp.listdir(path)
+                                        for pi in path_items:
+                                            if pi.endswith('.csv'):
+                                                self.root_path = test_path
+                                                logger.info(f"Found directory with CSV files: {test_path}")
+                                                return
+                                    except Exception:
+                                        # Continue to the next potential path
+                                        pass
+                        except Exception:
+                            # Continue to the next item
+                            pass
+                except Exception as e:
+                    logger.error(f"Error in last resort directory search: {e}")
+                        
+            if not self.root_path:
+                logger.warning(f"Could not find root path with any pattern. Using current directory.")
                 self.root_path = '.'
                 
         except Exception as e:
@@ -190,33 +254,113 @@ class SFTPClient:
     async def get_latest_csv_file(self):
         """Get the path to the latest CSV file by timestamp"""
         if not self.connected:
+            logger.info("SFTP client not connected, attempting to connect")
             await self.connect()
+            
         if not self.connected:
+            logger.error("Failed to connect to SFTP server")
             return None
         
         try:
             csv_files = []
-            # Search for CSV files in the root directory
-            for filename in self.sftp.listdir(self.root_path):
-                if re.match(CSV_FILENAME_PATTERN, filename):
-                    file_path = os.path.join(self.root_path, filename)
-                    # Get file modification time
-                    mtime = self.sftp.stat(file_path).st_mtime
-                    csv_files.append((file_path, mtime, filename))
+            # First check standard location (root path)
+            try:
+                logger.info(f"Searching for CSV files in root path: {self.root_path}")
+                for filename in self.sftp.listdir(self.root_path):
+                    if re.match(CSV_FILENAME_PATTERN, filename):
+                        file_path = os.path.join(self.root_path, filename)
+                        # Get file modification time
+                        mtime = self.sftp.stat(file_path).st_mtime
+                        csv_files.append((file_path, mtime, filename))
+                        
+                if csv_files:
+                    logger.info(f"Found {len(csv_files)} CSV files in root path")
+                else:
+                    logger.info("No CSV files found in root path, checking alternative locations")
+            except Exception as e:
+                logger.warning(f"Error accessing root directory: {e}")
+            
+            # If no files found in root path, check common subdirectories
+            if not csv_files:
+                common_subdirs = ['actual1', 'deathlogs', 'actual1/deathlogs']
+                for subdir in common_subdirs:
+                    try:
+                        subdir_path = os.path.join(self.root_path, subdir)
+                        logger.info(f"Checking for CSV files in {subdir_path}")
+                        
+                        for filename in self.sftp.listdir(subdir_path):
+                            if re.match(CSV_FILENAME_PATTERN, filename):
+                                file_path = os.path.join(subdir_path, filename)
+                                # Get file modification time
+                                mtime = self.sftp.stat(file_path).st_mtime
+                                csv_files.append((file_path, mtime, filename))
+                                
+                        if csv_files:
+                            logger.info(f"Found {len(csv_files)} CSV files in {subdir_path}")
+                            break
+                    except Exception as suberr:
+                        logger.debug(f"Couldn't access subdirectory {subdir}: {suberr}")
+            
+            # If still no files found, do a recursive search with limited depth
+            if not csv_files:
+                logger.info("Attempting recursive search for CSV files")
+                try:
+                    found_files = await self._find_csv_files_recursive(self.root_path, max_depth=2)
+                    for file_path in found_files:
+                        try:
+                            mtime = self.sftp.stat(file_path).st_mtime
+                            filename = os.path.basename(file_path)
+                            csv_files.append((file_path, mtime, filename))
+                        except Exception:
+                            continue
+                except Exception as rec_err:
+                    logger.error(f"Error in recursive CSV search: {rec_err}")
             
             # Sort by modification time (newest first)
             csv_files.sort(key=lambda x: x[1], reverse=True)
             
             if csv_files:
                 # Return path to the latest file
-                return csv_files[0][0]
+                latest_file = csv_files[0][0]
+                logger.info(f"Using latest CSV file: {latest_file} (Modified: {datetime.datetime.fromtimestamp(csv_files[0][1])})")
+                return latest_file
             else:
-                logger.warning(f"No CSV files found in {self.root_path}")
+                logger.warning(f"No CSV files found in any location for server {self.server_id}")
                 return None
                 
         except Exception as e:
             logger.error(f"Error getting latest CSV file: {e}", exc_info=True)
             return None
+            
+    async def _find_csv_files_recursive(self, path, max_depth=2, current_depth=0):
+        """Recursively search for CSV files"""
+        if current_depth > max_depth:
+            return []
+            
+        found_files = []
+        try:
+            # List directory contents
+            items = self.sftp.listdir(path)
+            
+            # Check each item
+            for item in items:
+                item_path = os.path.join(path, item)
+                try:
+                    if self._is_dir(item_path):
+                        # Recursively check subdirectory
+                        subdir_files = await self._find_csv_files_recursive(
+                            item_path, max_depth, current_depth + 1
+                        )
+                        found_files.extend(subdir_files)
+                    elif re.match(CSV_FILENAME_PATTERN, item):
+                        # Found a CSV file
+                        found_files.append(item_path)
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.debug(f"Error scanning directory {path}: {e}")
+            
+        return found_files
     
     async def get_all_csv_files(self):
         """Get all CSV files sorted by timestamp (oldest first)"""

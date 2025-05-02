@@ -21,6 +21,8 @@ CONNECTIONS_ICON = "attached_assets/be9bd1ee-0557-4e74-9091-3e73118ee8f1__1_-rem
 LEADERBOARD_ICON = "attached_assets/Leonardo_Phoenix_10_Design_a_custom_logo_for_a_Discord_embed_2-removebg-preview.png"
 WEAPON_STATS_ICON = "attached_assets/output_-_2025-04-20T233634.671-removebg-preview.png"
 FACTIONS_ICON = "attached_assets/d9e7043d-a313-4e9f-9f56-64cc97f0166b__1_-removebg-preview.png"
+ECONOMY_ICON = "attached_assets/Leonardo_Phoenix_10_Design_a_custom_logo_for_a_Discord_embed_2-removebg-preview.png"
+GAMBLING_ICON = "attached_assets/output_-_2025-04-20T233634.671-removebg-preview.png"
 DEFAULT_ICON = "attached_assets/output - 2025-04-19T181237.933.jpg"
 
 # Cache for Discord Files to avoid recreating them
@@ -74,13 +76,14 @@ def add_icon_to_embed(embed: discord.Embed, icon_path: Optional[str]) -> None:
     embed.set_thumbnail(url=f"attachment://{os.path.basename(icon_path)}")
     return
 
-async def send_embed_with_icon(ctx_or_channel, embed: discord.Embed, icon_path: Optional[str]) -> Optional[discord.Message]:
+async def send_embed_with_icon(ctx_or_channel, embed: discord.Embed, icon_path: Optional[str], **kwargs) -> Optional[discord.Message]:
     """Helper function to send an embed with its icon consistently
     
     Args:
         ctx_or_channel: Context or channel to send the message to
         embed: The embed to send
         icon_path: Path to the icon file to attach
+        **kwargs: Additional keyword arguments to pass to the send method
         
     Returns:
         discord.Message: The sent message or None if failed
@@ -90,26 +93,28 @@ async def send_embed_with_icon(ctx_or_channel, embed: discord.Embed, icon_path: 
         file = None
         if icon_path and os.path.exists(icon_path):
             file = create_discord_file(icon_path)
+            # Add the icon to the embed
+            add_icon_to_embed(embed, icon_path)
         
         # Send the message with the file if available
         if hasattr(ctx_or_channel, 'send'):
             if file:
-                return await ctx_or_channel.send(embed=embed, file=file)
+                return await ctx_or_channel.send(embed=embed, file=file, **kwargs)
             else:
-                return await ctx_or_channel.send(embed=embed)
+                return await ctx_or_channel.send(embed=embed, **kwargs)
         elif hasattr(ctx_or_channel, 'followup'):
             if file:
-                return await ctx_or_channel.followup.send(embed=embed, file=file)
+                return await ctx_or_channel.followup.send(embed=embed, file=file, **kwargs)
             else:
-                return await ctx_or_channel.followup.send(embed=embed)
+                return await ctx_or_channel.followup.send(embed=embed, **kwargs)
         return None
     except Exception as e:
         # Fall back to sending without the file if there's an error
         try:
             if hasattr(ctx_or_channel, 'send'):
-                return await ctx_or_channel.send(embed=embed)
+                return await ctx_or_channel.send(embed=embed, **kwargs)
             elif hasattr(ctx_or_channel, 'followup'):
-                return await ctx_or_channel.followup.send(embed=embed)
+                return await ctx_or_channel.followup.send(embed=embed, **kwargs)
             return None
         except:
             return None
@@ -132,6 +137,8 @@ def get_icon_for_embed_type(embed_type: str) -> Optional[str]:
         "leaderboard": LEADERBOARD_ICON,
         "connection": CONNECTIONS_ICON,
         "faction": FACTIONS_ICON,
+        "economy": ECONOMY_ICON,
+        "gambling": GAMBLING_ICON,
         "error": DEFAULT_ICON,
         "success": DEFAULT_ICON,
         "info": DEFAULT_ICON,

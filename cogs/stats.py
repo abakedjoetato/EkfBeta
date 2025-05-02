@@ -869,7 +869,7 @@ class Stats(commands.Cog):
             
             # Create embed
             embed = EmbedBuilder.create_base_embed(
-                f"🏆 {stat_display} Leaderboard",
+                f"{stat_display} Leaderboard",
                 f"Top {len(leaderboard_data)} players on {server_name}"
             , guild=guild_model)
             
@@ -878,13 +878,15 @@ class Stats(commands.Cog):
             
             leaderboard_str = ""
             for i, entry in enumerate(leaderboard_data):
-                medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"{i+1}."
-                leaderboard_str += f"{medal} **{entry['player_name']}**: {entry['value']}{value_suffix}\n"
+                # Use numbers instead of emoji medals for a cleaner look
+                position = f"#{i+1}"
+                leaderboard_str += f"{position} **{entry['player_name']}**: {entry['value']}{value_suffix}\n"
             
-            embed.description = leaderboard_str
+            embed.add_field(name="Rankings", value=leaderboard_str, inline=False)
             
-            # Send the embed
-            await ctx.send(embed=embed)
+            # Get the icon for leaderboard and send with icon
+            from utils.embed_icons import send_embed_with_icon, LEADERBOARD_ICON
+            await send_embed_with_icon(ctx, embed, LEADERBOARD_ICON)
             
         except Exception as e:
             logger.error(f"Error getting leaderboard: {e}", exc_info=True)
@@ -998,7 +1000,7 @@ class Stats(commands.Cog):
             
             # Create embed
             embed = EmbedBuilder.create_base_embed(
-                f"📊 Weapon Category Stats",
+                f"Weapon Category Stats",
                 f"Weapon category breakdown on {server_name}"
             , guild=guild_model)
             
@@ -1031,7 +1033,9 @@ class Stats(commands.Cog):
             if definitions:
                 embed.add_field(name="Category Definitions", value="\n".join(definitions), inline=False)
                 
-            await ctx.send(embed=embed)
+            # Send with appropriate weapon icon
+            from utils.embed_icons import send_embed_with_icon, WEAPON_STATS_ICON
+            await send_embed_with_icon(ctx, embed, WEAPON_STATS_ICON)
             
         except Exception as e:
             logger.error(f"Error getting weapon category stats: {e}", exc_info=True)
@@ -1185,7 +1189,7 @@ class Stats(commands.Cog):
                 
                 # Create embed with weapon category
                 embed = EmbedBuilder.create_base_embed(
-                    f"🔫 {weapon_name} Stats",
+                    f"{weapon_name} Statistics",
                     f"Weapon statistics on {server_name}"
                 , guild=guild_model)
                 
@@ -1250,12 +1254,20 @@ class Stats(commands.Cog):
                 
                 embeds.append(embed)
             
+            # Get the weapon icon
+            from utils.embed_icons import send_embed_with_icon, WEAPON_STATS_ICON, add_icon_to_embed, create_discord_file
+            
             # Send the first embed with pagination if multiple
             if len(embeds) > 1:
+                # For pagination, we have to use standard send first
                 current_embed, view = paginate_embeds(embeds)
-                await ctx.send(embed=current_embed, view=view)
+                # Add the icon to all embeds
+                for embed in embeds:
+                    add_icon_to_embed(embed, WEAPON_STATS_ICON)
+                await ctx.send(embed=current_embed, view=view, file=create_discord_file(WEAPON_STATS_ICON))
             else:
-                await ctx.send(embed=embeds[0])
+                # Single embed can use our helper
+                await send_embed_with_icon(ctx, embeds[0], WEAPON_STATS_ICON)
             
         except Exception as e:
             logger.error(f"Error getting weapon stats: {e}", exc_info=True)

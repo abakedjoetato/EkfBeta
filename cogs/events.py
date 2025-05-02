@@ -3,6 +3,7 @@ Events commands and background tasks for monitoring server events
 """
 import logging
 import asyncio
+import time
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -1072,6 +1073,12 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
     """Background task to monitor events for a server"""
     from config import EVENTS_REFRESH_INTERVAL
     
+    # Initialize reconnection tracking
+    reconnect_attempts = 0
+    max_reconnect_attempts = 10
+    backoff_time = 5  # Start with 5 seconds
+    last_successful_connection = time.time()
+    
     # Check if we actually have server data in the database
     # This prevents errors when the bot starts up with empty database
     if await bot.db.guilds.count_documents({"guild_id": guild_id, "servers": {"$exists": True, "$ne": []}}) == 0:
@@ -1097,6 +1104,20 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
         events_channel_id = server.events_channel_id
         if not events_channel_id:
             logger.warning(f"No events channel configured for server {server_id} in guild {guild_id}")
+            
+            # Send a direct message to administrators about missing configuration
+            try:
+                guild_model = await Guild.get_by_id(bot.db, guild_id)
+                if guild_model and guild_model.admin_role_id:
+                    # Try to get admin role
+                    guild = bot.get_guild(guild_id)
+                    if guild:
+                        admin_role = guild.get_role(guild_model.admin_role_id)
+                        if admin_role and admin_role.members:
+                            admin = admin_role.members[0]  # Get first admin
+                            await admin.send(f"⚠️ Event notifications for server {server.name} cannot be sent because no events channel is configured. Please use `/setup setup_channels` to set one up.")
+            except Exception as notify_e:
+                logger.warning(f"Could not notify admin about missing events channel: {notify_e}")
             return
         
         # Create SFTP client connection or use existing one
@@ -1109,6 +1130,13 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
                 connected = await sftp_client.connect()
                 if not connected:
                     logger.error(f"Failed to connect to SFTP server for {server_id}: {sftp_client.last_error}")
+                    # Try to notify an admin if possible
+                    try:
+                        guild = bot.get_guild(guild_id)
+                        if guild and guild.owner:
+                            await guild.owner.send(f"⚠️ Could not connect to SFTP server for {server.name}. Error: {sftp_client.last_error}")
+                    except Exception:
+                        pass  # Silently ignore if we can't message the owner
                     return
         else:
             # Create new connection
@@ -1138,19 +1166,69 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
         
         events_channel_id = server.events_channel_id
         events_channel = guild.get_channel(events_channel_id) if events_channel_id else None
+        if events_channel_id and not events_channel:
+            try:
+                # Try to fetch channel through HTTP API in case it's not in cache
+                events_channel = await guild.fetch_channel(events_channel_id)
+            except discord.NotFound:
+                logger.error(f"Events channel {events_channel_id} not found in guild {guild_id}")
+                await sftp_client.disconnect()
+                return
+            except Exception as fetch_e:
+                logger.error(f"Error fetching events channel: {fetch_e}")
+                await sftp_client.disconnect()
+                return
         
         connections_channel_id = server.connections_channel_id
         connections_channel = guild.get_channel(connections_channel_id) if connections_channel_id else None
+        if connections_channel_id and not connections_channel:
+            try:
+                # Try to fetch channel through HTTP API
+                connections_channel = await guild.fetch_channel(connections_channel_id)
+            except discord.NotFound:
+                logger.warning(f"Connections channel {connections_channel_id} not found in guild {guild_id}")
+                # Continue anyway, we'll just skip connection notifications
+            except Exception as fetch_e:
+                logger.warning(f"Error fetching connections channel: {fetch_e}")
         
         voice_channel_id = server.voice_status_channel_id
         
+        # Send initial notification to confirm monitor is running
+        try:
+            guild_model = await Guild.get_by_id(bot.db, guild_id)
+            embed = EmbedBuilder.create_base_embed(
+                "Events Monitor Active",
+                f"Monitoring events for server {server.name} (ID: {server_id}).",
+                guild=guild_model
+            )
+            embed.add_field(
+                name="Status", 
+                value="Active and monitoring for new events", 
+                inline=False
+            )
+            embed.set_footer(text=f"Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Powered By Discord.gg/EmeraldServers")
+            if events_channel:
+                await events_channel.send(embed=embed)
+        except Exception as notify_e:
+            logger.warning(f"Could not send startup notification: {notify_e}")
+        
         # Main monitoring loop
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+        
         while True:
             try:
                 # Get log file
                 log_file = await sftp_client.get_log_file()
                 if not log_file:
                     logger.warning(f"No log file found for server {server_id}")
+                    # If we haven't found a log file for a while, try reconnecting
+                    if time.time() - last_successful_connection > 300:  # 5 minutes
+                        logger.info(f"No log file found for 5 minutes, reconnecting SFTP for server {server_id}")
+                        await sftp_client.disconnect()
+                        await asyncio.sleep(1)
+                        await sftp_client.connect()
+                        last_successful_connection = time.time()
                     await asyncio.sleep(EVENTS_REFRESH_INTERVAL)
                     continue
                 
@@ -1163,6 +1241,12 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
                         log_file,
                         chunk_size=5000  # Use a reasonable chunk size for better performance
                     )
+                    
+                    # Reset consecutive errors on success
+                    consecutive_errors = 0
+                    reconnect_attempts = 0
+                    backoff_time = 5
+                    last_successful_connection = time.time()
                     
                     # If no new lines, sleep and continue
                     if total_lines <= last_line:
@@ -1181,37 +1265,68 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
                     # Reconnect after timeout
                     await sftp_client.disconnect()
                     await asyncio.sleep(1)
-                    await sftp_client.connect()
+                    connected = await sftp_client.connect()
+                    if not connected:
+                        logger.error(f"Failed to reconnect after timeout for server {server_id}")
+                        consecutive_errors += 1
+                    await asyncio.sleep(EVENTS_REFRESH_INTERVAL)
+                    continue
+                except Exception as file_e:
+                    logger.error(f"Error reading log file: {file_e}")
+                    consecutive_errors += 1
                     await asyncio.sleep(EVENTS_REFRESH_INTERVAL)
                     continue
                 
                 if not new_lines:
+                    logger.debug(f"No new lines in log file for server {server_id}")
                     await asyncio.sleep(EVENTS_REFRESH_INTERVAL)
                     continue
                 
                 # Parse new lines
                 events, connections = LogParser.parse_log_lines(new_lines)
                 
+                # Log successful parsing
+                if events or connections:
+                    logger.info(f"Parsed {len(events)} events and {len(connections)} connections from {len(new_lines)} lines for server {server_id}")
+                
                 # Process events
+                processed_events = 0
                 if events and events_channel:
                     for event_data in events:
-                        await process_event(bot, server, event_data, events_channel)
+                        try:
+                            await process_event(bot, server, event_data, events_channel)
+                            processed_events += 1
+                        except Exception as event_e:
+                            logger.error(f"Error processing event: {event_e}", exc_info=True)
                 
                 # Process connections
+                processed_connections = 0
                 if connections and connections_channel:
                     for connection_data in connections:
-                        await process_connection(bot, server, connection_data, connections_channel)
+                        try:
+                            await process_connection(bot, server, connection_data, connections_channel)
+                            processed_connections += 1
+                        except Exception as conn_e:
+                            logger.error(f"Error processing connection: {conn_e}", exc_info=True)
                 
                 # Update voice channel with player count
                 if voice_channel_id:
-                    # Get current player count
-                    player_count, _ = await server.get_online_player_count()
-                    
-                    # Update voice channel
-                    await update_voice_channel_name(bot, guild_id, voice_channel_id, player_count)
+                    try:
+                        # Get current player count
+                        player_count, _ = await server.get_online_player_count()
+                        
+                        # Update voice channel
+                        await update_voice_channel_name(bot, guild_id, voice_channel_id, player_count)
+                    except Exception as voice_e:
+                        logger.warning(f"Error updating voice channel: {voice_e}")
                 
-                # Update last processed line
-                await server.update_last_log_line(last_line + len(new_lines))
+                # Update last processed line only if we successfully processed events/connections
+                if processed_events > 0 or processed_connections > 0 or (len(events) == 0 and len(connections) == 0):
+                    await server.update_last_log_line(last_line + len(new_lines))
+                    logger.debug(f"Updated last log line to {last_line + len(new_lines)} for server {server_id}")
+                
+                # Reset consecutive errors on success
+                consecutive_errors = 0
                 
             except asyncio.CancelledError:
                 logger.info(f"Events monitor for server {server_id} cancelled")
@@ -1219,6 +1334,33 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
                 
             except Exception as e:
                 logger.error(f"Error in events monitor for server {server_id}: {e}", exc_info=True)
+                consecutive_errors += 1
+                
+                # Attempt reconnection if we've had too many consecutive errors
+                if consecutive_errors >= max_consecutive_errors:
+                    if reconnect_attempts < max_reconnect_attempts:
+                        logger.warning(f"Too many consecutive errors ({consecutive_errors}), attempting reconnection for server {server_id}")
+                        try:
+                            await sftp_client.disconnect()
+                            await asyncio.sleep(backoff_time)  # Exponential backoff
+                            connected = await sftp_client.connect()
+                            if connected:
+                                logger.info(f"Successfully reconnected SFTP for server {server_id}")
+                                consecutive_errors = 0
+                                backoff_time = min(backoff_time * 2, 60)  # Exponential backoff with max of 60 seconds
+                            reconnect_attempts += 1
+                        except Exception as reconnect_e:
+                            logger.error(f"Error during reconnection attempt: {reconnect_e}")
+                    else:
+                        logger.error(f"Exceeded maximum reconnection attempts for server {server_id}, stopping monitor")
+                        # Try to notify an admin if possible
+                        try:
+                            guild = bot.get_guild(guild_id)
+                            if guild and guild.owner:
+                                await guild.owner.send(f"⚠️ Events monitor for {server.name} has been stopped due to too many connection failures. Please restart it manually with `/events start`.")
+                        except Exception:
+                            pass  # Silently ignore if we can't message the owner
+                        break
             
             # Sleep before next check
             await asyncio.sleep(EVENTS_REFRESH_INTERVAL)
@@ -1232,6 +1374,29 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
     finally:
         # No need to clean up SFTP connection as killfeed monitor might be using it
         logger.info(f"Events monitor for server {server_id} stopped")
+        
+        # Try to send notification that monitor has stopped
+        try:
+            guild = bot.get_guild(guild_id)
+            if guild:
+                server = await Server.get_by_id(bot.db, server_id, guild_id)
+                if server and server.events_channel_id:
+                    channel = guild.get_channel(server.events_channel_id)
+                    if channel:
+                        guild_model = await Guild.get_by_id(bot.db, guild_id)
+                        embed = EmbedBuilder.create_error_embed(
+                            "Events Monitor Stopped",
+                            f"The events monitor for server {server.name} has stopped.",
+                            guild=guild_model
+                        )
+                        embed.add_field(
+                            name="Restart", 
+                            value="Use `/events start` to restart the monitor.", 
+                            inline=False
+                        )
+                        await channel.send(embed=embed)
+        except Exception as notify_e:
+            logger.warning(f"Could not send shutdown notification: {notify_e}")
 
 
 async def process_event(bot, server, event_data, channel):

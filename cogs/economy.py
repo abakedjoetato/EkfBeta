@@ -361,26 +361,29 @@ class Economy(commands.Cog):
                 await ctx.send(embed=embed)
                 return
             
-            # Create embed
-            embed = discord.Embed(
-                title="💰 Richest Players",
+            # Create embed with leaderboard icon
+            embed = EmbedBuilder.create_base_embed(
+                title="Richest Players",
                 description=f"Server: {server_name}",
-                color=discord.Color.gold()
+                guild=guild_model
             )
             
             # Add leaderboard entries
             leaderboard_str = ""
             for i, player in enumerate(richest_players):
-                medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"{i+1}."
+                # Use numbers instead of emoji medals
+                position = f"#{i+1}"
                 player_name = player.get("player_name", "Unknown Player")
                 currency = player.get("currency", 0)
                 lifetime = player.get("lifetime_earnings", 0)
                 
-                leaderboard_str += f"{medal} **{player_name}**: {currency} credits (Lifetime: {lifetime})\n"
+                leaderboard_str += f"{position} **{player_name}**: {currency} credits (Lifetime: {lifetime})\n"
             
-            embed.description = leaderboard_str
+            embed.add_field(name="Rankings", value=leaderboard_str, inline=False)
             
-            await ctx.send(embed=embed)
+            # Get the icon for leaderboard and send with icon
+            from utils.embed_icons import send_embed_with_icon, LEADERBOARD_ICON
+            await send_embed_with_icon(ctx, embed, LEADERBOARD_ICON)
             
         except Exception as e:
             logger.error(f"Error getting leaderboard: {e}", exc_info=True)
@@ -614,17 +617,19 @@ class Economy(commands.Cog):
             # Create slots view
             view = SlotsView(player_id, economy, bet)
             
-            # Create initial embed
-            embed = discord.Embed(
-                title="🎰 Slot Machine 🎰",
+            # Create initial embed with theme
+            embed = EmbedBuilder.create_base_embed(
+                title="Slot Machine",
                 description=f"Ready to play! Bet: {bet} credits",
-                color=discord.Color.blue()
+                guild=guild_model
             )
             
             embed.add_field(name="Instructions", value="Click 'Spin' to start playing", inline=False)
             embed.add_field(name="Your Balance", value=f"{balance} credits", inline=False)
             
-            await ctx.send(embed=embed, view=view)
+            # Send with gambling icon
+            from utils.embed_icons import send_embed_with_icon, GAMBLING_ICON
+            await send_embed_with_icon(ctx, embed, GAMBLING_ICON, view=view)
             
             game_key = f"{ctx.guild.id}_{player_id}_slots"
             self.active_games[game_key] = view
@@ -743,23 +748,470 @@ class Economy(commands.Cog):
             await recipient_economy.add_currency(amount, "received", {"sender_id": player_id, "sender_name": ctx.author.name})
             
             # Create embed
-            embed = discord.Embed(
-                title="💸 Credits Transfer",
+            embed = EmbedBuilder.create_base_embed(
+                title="Credits Transfer",
                 description=f"Successfully transferred {amount} credits to {user.mention}",
-                color=discord.Color.green()
+                guild=guild_model
             )
             
             # Get new balances
             player_new_balance = await player_economy.get_balance()
             embed.add_field(name="Your New Balance", value=f"{player_new_balance} credits", inline=False)
             
-            await ctx.send(embed=embed)
+            # Send with economy icon
+            from utils.embed_icons import send_embed_with_icon, ECONOMY_ICON
+            await send_embed_with_icon(ctx, embed, ECONOMY_ICON)
             
         except Exception as e:
             logger.error(f"Error giving credits: {e}", exc_info=True)
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while giving credits: {e}"
+            , guild=guild_model)
+            await ctx.send(embed=embed)
+
+    @economy.command(name="adjust", description="Add or remove credits from a player (Admin only)")
+    @app_commands.describe(
+        server_id="Select a server by name",
+        user="The user to adjust credits for",
+        amount="The amount to add (positive) or remove (negative)",
+        reason="Reason for the adjustment"
+    )
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
+    async def adjust_credits(self, ctx, server_id: str, user: discord.Member, amount: int, reason: str = "Admin adjustment"):
+        """Add or remove credits from a player (Admin only)"""
+        try:
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+
+            # Check if user has admin permission
+            from utils.helpers import has_admin_permission
+            if not has_admin_permission(ctx):
+                embed = EmbedBuilder.create_error_embed(
+                    "Permission Denied",
+                    "You need administrator permission or the designated admin role to use this command.",
+                    guild=guild_model)
+                await ctx.send(embed=embed, ephemeral=True)
+                return
+            
+            # Get guild data
+            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+            if not guild_data:
+                embed = EmbedBuilder.create_error_embed(
+                    "Error",
+                    "This guild is not set up. Please use the setup commands first."
+                , guild=guild_model)
+                await ctx.send(embed=embed)
+                return
+            
+            # Check if the guild has access to economy feature
+            guild = Guild(self.bot.db, guild_data)
+            if not guild.check_feature_access("economy"):
+                embed = EmbedBuilder.create_error_embed(
+                    "Premium Feature",
+                    "Economy features are premium features. Please upgrade to access this feature."
+                , guild=guild_model)
+                await ctx.send(embed=embed)
+                return
+            
+            # Find the server
+            server = None
+            server_name = server_id
+            for s in guild_data.get("servers", []):
+                if s.get("server_id") == server_id:
+                    server = s
+                    server_name = s.get("server_name", server_id)
+                    break
+            
+            if not server:
+                embed = EmbedBuilder.create_error_embed(
+                    "Server Not Found",
+                    f"Server with ID {server_id} not found in this guild."
+                , guild=guild_model)
+                await ctx.send(embed=embed)
+                return
+            
+            # Validate amount - can be any integer except 0
+            if amount == 0:
+                embed = EmbedBuilder.create_error_embed(
+                    "Invalid Amount",
+                    "Amount must be non-zero. Use positive values to add and negative to remove credits."
+                , guild=guild_model)
+                await ctx.send(embed=embed)
+                return
+            
+            # Get player data
+            player_id = str(user.id)
+            economy = await Economy.get_by_player(self.bot.db, player_id, server_id)
+            
+            if not economy:
+                # Create new economy account
+                economy = await Economy.create_or_update(self.bot.db, player_id, server_id)
+                
+            # Get initial balance for reporting
+            initial_balance = await economy.get_balance()
+            
+            # Add or remove currency
+            if amount > 0:
+                await economy.add_currency(amount, "admin_adjustment", {
+                    "admin_id": str(ctx.author.id),
+                    "admin_name": ctx.author.name,
+                    "reason": reason
+                })
+                action_text = "Added"
+            else:
+                # Absolute value for remove_currency
+                removal_result = await economy.remove_currency(abs(amount), "admin_adjustment", {
+                    "admin_id": str(ctx.author.id),
+                    "admin_name": ctx.author.name,
+                    "reason": reason
+                })
+                
+                if not removal_result:
+                    embed = EmbedBuilder.create_error_embed(
+                        "Insufficient Funds",
+                        f"Player only has {initial_balance} credits. Cannot remove {abs(amount)} credits."
+                    , guild=guild_model)
+                    await ctx.send(embed=embed)
+                    return
+                    
+                action_text = "Removed"
+            
+            # Get new balance
+            new_balance = await economy.get_balance()
+            
+            # Create success embed
+            embed = EmbedBuilder.create_base_embed(
+                title="Credits Adjustment",
+                description=f"{action_text} {abs(amount)} credits {'to' if amount > 0 else 'from'} {user.mention}",
+                guild=guild_model
+            )
+            
+            embed.add_field(name="Previous Balance", value=f"{initial_balance} credits", inline=True)
+            embed.add_field(name="New Balance", value=f"{new_balance} credits", inline=True)
+            embed.add_field(name="Reason", value=reason, inline=False)
+            
+            # Send with economy icon
+            from utils.embed_icons import send_embed_with_icon, ECONOMY_ICON
+            await send_embed_with_icon(ctx, embed, ECONOMY_ICON)
+            
+            # Log the adjustment
+            logger.info(f"Admin {ctx.author.name} ({ctx.author.id}) {action_text.lower()} {abs(amount)} credits {'to' if amount > 0 else 'from'} {user.name} ({user.id}) on server {server_name} ({server_id})")
+            
+        except Exception as e:
+            logger.error(f"Error adjusting credits: {e}", exc_info=True)
+            embed = EmbedBuilder.create_error_embed(
+                "Error",
+                f"An error occurred while adjusting credits: {e}"
+            , guild=guild_model)
+            await ctx.send(embed=embed)
+            
+    @economy.command(name="transactions", description="View your transaction history")
+    @app_commands.describe(
+        server_id="Select a server by name",
+        user="The user to view transactions for (admins only)",
+        limit="Maximum number of transactions to show"
+    )
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
+    async def transactions(self, ctx, server_id: str, user: Optional[discord.Member] = None, limit: int = 10):
+        """View your transaction history or another user's (admin only)"""
+        try:
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+
+            # If user is specified, check if command user is admin
+            target_user = user or ctx.author
+            if user and user.id != ctx.author.id:
+                from utils.helpers import has_admin_permission
+                if not has_admin_permission(ctx):
+                    embed = EmbedBuilder.create_error_embed(
+                        "Permission Denied",
+                        "You can only view your own transactions unless you're an admin.",
+                        guild=guild_model)
+                    await ctx.send(embed=embed, ephemeral=True)
+                    return
+            
+            # Get guild data
+            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+            if not guild_data:
+                embed = EmbedBuilder.create_error_embed(
+                    "Error",
+                    "This guild is not set up. Please use the setup commands first."
+                , guild=guild_model)
+                await ctx.send(embed=embed)
+                return
+            
+            # Check if the guild has access to economy feature
+            guild = Guild(self.bot.db, guild_data)
+            if not guild.check_feature_access("economy"):
+                embed = EmbedBuilder.create_error_embed(
+                    "Premium Feature",
+                    "Economy features are premium features. Please upgrade to access this feature."
+                , guild=guild_model)
+                await ctx.send(embed=embed)
+                return
+            
+            # Find the server
+            server = None
+            server_name = server_id
+            for s in guild_data.get("servers", []):
+                if s.get("server_id") == server_id:
+                    server = s
+                    server_name = s.get("server_name", server_id)
+                    break
+            
+            if not server:
+                embed = EmbedBuilder.create_error_embed(
+                    "Server Not Found",
+                    f"Server with ID {server_id} not found in this guild."
+                , guild=guild_model)
+                await ctx.send(embed=embed)
+                return
+            
+            # Limit the maximum number of transactions to retrieve
+            if limit < 1:
+                limit = 1
+            elif limit > 25:
+                limit = 25
+
+            # Get player data
+            player_id = str(target_user.id)
+            economy = await Economy.get_by_player(self.bot.db, player_id, server_id)
+            
+            if not economy:
+                # Create new economy account
+                economy = await Economy.create_or_update(self.bot.db, player_id, server_id)
+                
+            # Get transaction history
+            transactions = await economy.get_recent_transactions(limit)
+            current_balance = await economy.get_balance()
+
+            # Create embed for transaction history
+            embed = EmbedBuilder.create_base_embed(
+                title="Transaction History",
+                description=f"Recent transactions for {target_user.mention} on {server_name}",
+                guild=guild_model
+            )
+            
+            embed.add_field(name="Current Balance", value=f"{current_balance} credits", inline=False)
+            
+            if not transactions:
+                embed.add_field(name="No Transactions", value="No transaction history found", inline=False)
+            else:
+                # Format transactions
+                for i, tx in enumerate(transactions[:10], 1):  # Show at most 10 in embed
+                    # Get transaction details
+                    amount = tx.get("amount", 0)
+                    tx_type = tx.get("type", "unknown")
+                    source = tx.get("source", "unknown")
+                    balance = tx.get("balance", 0)
+                    timestamp = tx.get("timestamp")
+                    
+                    # Format timestamp
+                    if timestamp:
+                        if isinstance(timestamp, str):
+                            try:
+                                timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            except ValueError:
+                                timestamp = None
+                        
+                        if timestamp:
+                            time_str = f"<t:{int(timestamp.timestamp())}:R>"
+                        else:
+                            time_str = "Unknown time"
+                    else:
+                        time_str = "Unknown time"
+                    
+                    # Format details based on source
+                    details = ""
+                    if source == "daily_reward":
+                        details = "Daily reward claimed"
+                    elif source == "gambling":
+                        game = tx.get("details", {}).get("game", "unknown")
+                        result = tx.get("details", {}).get("result", "unknown")
+                        details = f"{game.capitalize()} - {result.capitalize()}"
+                    elif source == "admin_adjustment":
+                        admin_name = tx.get("details", {}).get("admin_name", "Unknown")
+                        reason = tx.get("details", {}).get("reason", "No reason provided")
+                        details = f"By {admin_name}: {reason}"
+                    elif source == "interest":
+                        rate = tx.get("details", {}).get("rate", 0) * 100
+                        details = f"Weekly interest at {rate}%"
+                    elif source == "transfer":
+                        if tx_type == "credit":
+                            from_name = tx.get("details", {}).get("from_name", "Unknown")
+                            details = f"From {from_name}"
+                        else:  # debit
+                            to_name = tx.get("details", {}).get("to_name", "Unknown")
+                            details = f"To {to_name}"
+                    
+                    # Format field
+                    sign = "+" if tx_type == "credit" else "-"
+                    field_name = f"{i}. {sign}{amount} credits ({time_str})"
+                    field_value = f"Source: {source.replace('_', ' ').title()}\nBalance: {balance} credits"
+                    if details:
+                        field_value += f"\nDetails: {details}"
+                    
+                    embed.add_field(name=field_name, value=field_value, inline=False)
+            
+            # Send with economy icon
+            from utils.embed_icons import send_embed_with_icon, ECONOMY_ICON
+            await send_embed_with_icon(ctx, embed, ECONOMY_ICON)
+            
+        except Exception as e:
+            logger.error(f"Error viewing transactions: {e}", exc_info=True)
+            embed = EmbedBuilder.create_error_embed(
+                "Error",
+                f"An error occurred while viewing transactions: {e}"
+            , guild=guild_model)
+            await ctx.send(embed=embed)
+    
+    @economy.command(name="stats", description="View economy statistics for a server")
+    @app_commands.describe(
+        server_id="Select a server by name"
+    )
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
+    async def economy_stats(self, ctx, server_id: str):
+        """View economy statistics for a server (Admin only)"""
+        try:
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
+
+            # Check if user has admin permission
+            from utils.helpers import has_admin_permission
+            if not has_admin_permission(ctx):
+                embed = EmbedBuilder.create_error_embed(
+                    "Permission Denied",
+                    "You need administrator permission or the designated admin role to use this command.",
+                    guild=guild_model)
+                await ctx.send(embed=embed, ephemeral=True)
+                return
+            
+            # Get guild data
+            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+            if not guild_data:
+                embed = EmbedBuilder.create_error_embed(
+                    "Error",
+                    "This guild is not set up. Please use the setup commands first."
+                , guild=guild_model)
+                await ctx.send(embed=embed)
+                return
+            
+            # Check if the guild has access to economy feature
+            guild = Guild(self.bot.db, guild_data)
+            if not guild.check_feature_access("economy"):
+                embed = EmbedBuilder.create_error_embed(
+                    "Premium Feature",
+                    "Economy features are premium features. Please upgrade to access this feature."
+                , guild=guild_model)
+                await ctx.send(embed=embed)
+                return
+            
+            # Find the server
+            server = None
+            server_name = server_id
+            for s in guild_data.get("servers", []):
+                if s.get("server_id") == server_id:
+                    server = s
+                    server_name = s.get("server_name", server_id)
+                    break
+            
+            if not server:
+                embed = EmbedBuilder.create_error_embed(
+                    "Server Not Found",
+                    f"Server with ID {server_id} not found in this guild."
+                , guild=guild_model)
+                await ctx.send(embed=embed)
+                return
+                
+            # Get economy statistics
+            stats = await Economy.get_economy_stats(self.bot.db, server_id)
+            
+            # Create embed for economy stats
+            embed = EmbedBuilder.create_base_embed(
+                title="Economy Statistics",
+                description=f"Economy statistics for {server_name}",
+                guild=guild_model
+            )
+            
+            # General stats
+            embed.add_field(
+                name="General Statistics", 
+                value=f"Total Currency: {stats['total_currency']:,} credits\n"
+                      f"Lifetime Earnings: {stats['total_lifetime_earnings']:,} credits\n"
+                      f"Active Accounts: {stats['active_accounts']:,}",
+                inline=False
+            )
+            
+            # Gambling stats
+            blackjack = stats['gambling_stats']['blackjack']
+            slots = stats['gambling_stats']['slots']
+            # Calculate win rates safely (avoid division by zero)
+            bj_games = blackjack['wins'] + blackjack['losses']
+            bj_win_rate = (blackjack['wins'] / bj_games) * 100 if bj_games > 0 else 0.0
+            
+            slots_games = slots['wins'] + slots['losses']
+            slots_win_rate = (slots['wins'] / slots_games) * 100 if slots_games > 0 else 0.0
+            
+            gambling_text = (
+                f"**Blackjack**\n"
+                f"Games Played: {bj_games:,}\n"
+                f"Wins: {blackjack['wins']:,} | Losses: {blackjack['losses']:,}\n"
+                f"Win Rate: {bj_win_rate:.1f}%\n"
+                f"Player Earnings: {blackjack['earnings']:,} credits\n\n"
+                
+                f"**Slots**\n"
+                f"Games Played: {slots_games:,}\n"
+                f"Wins: {slots['wins']:,} | Losses: {slots['losses']:,}\n"
+                f"Win Rate: {slots_win_rate:.1f}%\n"
+                f"Player Earnings: {slots['earnings']:,} credits"
+            )
+            embed.add_field(name="Gambling Statistics", value=gambling_text, inline=False)
+            
+            # Transaction sources
+            sources = stats['transaction_sources']
+            if sources:
+                sources_text = ""
+                for source, data in sorted(sources.items(), key=lambda x: x[1]['count'], reverse=True)[:5]:
+                    source_name = source.replace('_', ' ').title()
+                    sources_text += f"**{source_name}**\n"
+                    sources_text += f"Count: {data['count']:,} transactions\n"
+                    sources_text += f"Credits In: {data['credit']:,} | Credits Out: {data['debit']:,}\n\n"
+                
+                embed.add_field(name="Top Transaction Sources", value=sources_text, inline=False)
+            else:
+                embed.add_field(name="Transaction Sources", value="No transactions recorded yet", inline=False)
+            
+            # Send with economy icon
+            from utils.embed_icons import send_embed_with_icon, ECONOMY_ICON
+            await send_embed_with_icon(ctx, embed, ECONOMY_ICON)
+            
+        except Exception as e:
+            logger.error(f"Error viewing economy stats: {e}", exc_info=True)
+            embed = EmbedBuilder.create_error_embed(
+                "Error",
+                f"An error occurred while viewing economy statistics: {e}"
             , guild=guild_model)
             await ctx.send(embed=embed)
 

@@ -3,6 +3,7 @@ Killfeed commands and background tasks for monitoring kill feeds
 """
 import logging
 import asyncio
+import time
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -392,6 +393,12 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
     """Background task to monitor killfeed for a server"""
     from config import KILLFEED_REFRESH_INTERVAL
     
+    # Initialize reconnection tracking
+    reconnect_attempts = 0
+    max_reconnect_attempts = 10
+    backoff_time = 5  # Start with 5 seconds
+    last_successful_connection = time.time()
+    
     # Check if we actually have server data in the database
     # This prevents errors when the bot starts up with empty database
     if await bot.db.guilds.count_documents({"guild_id": guild_id, "servers": {"$exists": True, "$ne": []}}) == 0:
@@ -417,6 +424,19 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
         killfeed_channel_id = server.killfeed_channel_id
         if not killfeed_channel_id:
             logger.warning(f"No killfeed channel configured for server {server_id} in guild {guild_id}")
+            # Send a direct message to administrators about missing configuration
+            try:
+                guild_model = await Guild.get_by_id(bot.db, guild_id)
+                if guild_model and guild_model.admin_role_id:
+                    # Try to get admin role
+                    guild = bot.get_guild(guild_id)
+                    if guild:
+                        admin_role = guild.get_role(guild_model.admin_role_id)
+                        if admin_role and admin_role.members:
+                            admin = admin_role.members[0]  # Get first admin
+                            await admin.send(f"⚠️ Killfeed notifications for server {server.name} cannot be sent because no killfeed channel is configured. Please use `/setup setup_channels` to set one up.")
+            except Exception as notify_e:
+                logger.warning(f"Could not notify admin about missing killfeed channel: {notify_e}")
             return
         
         # Create SFTP client connection
@@ -432,6 +452,13 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
         connected = await sftp_client.connect()
         if not connected:
             logger.error(f"Failed to connect to SFTP server for {server_id}: {sftp_client.last_error}")
+            # Try to notify an admin if possible
+            try:
+                guild = bot.get_guild(guild_id)
+                if guild and guild.owner:
+                    await guild.owner.send(f"⚠️ Could not connect to SFTP server for {server.name}. Error: {sftp_client.last_error}")
+            except Exception:
+                pass  # Silently ignore if we can't message the owner
             return
         
         # Store client for later use
@@ -447,17 +474,53 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
         killfeed_channel_id = server.killfeed_channel_id
         killfeed_channel = guild.get_channel(killfeed_channel_id)
         if not killfeed_channel:
-            logger.error(f"Killfeed channel {killfeed_channel_id} not found in guild {guild_id}")
-            await sftp_client.disconnect()
-            return
+            try:
+                # Try to fetch channel through HTTP API in case it's not in cache
+                killfeed_channel = await guild.fetch_channel(killfeed_channel_id)
+            except discord.NotFound:
+                logger.error(f"Killfeed channel {killfeed_channel_id} not found in guild {guild_id}")
+                await sftp_client.disconnect()
+                return
+            except Exception as fetch_e:
+                logger.error(f"Error fetching killfeed channel: {fetch_e}")
+                await sftp_client.disconnect()
+                return
+        
+        # Send initial notification to confirm monitor is running
+        try:
+            guild_model = await Guild.get_by_id(bot.db, guild_id)
+            embed = EmbedBuilder.create_base_embed(
+                "Killfeed Monitor Active",
+                f"Monitoring killfeed for server {server.name} (ID: {server_id}).",
+                guild=guild_model
+            )
+            embed.add_field(
+                name="Status", 
+                value="Active and monitoring for new kills", 
+                inline=False
+            )
+            embed.set_footer(text=f"Started at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Powered By Discord.gg/EmeraldServers")
+            await killfeed_channel.send(embed=embed)
+        except Exception as notify_e:
+            logger.warning(f"Could not send startup notification: {notify_e}")
         
         # Main monitoring loop
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+        
         while True:
             try:
                 # Get latest CSV file
                 latest_csv = await sftp_client.get_latest_csv_file()
                 if not latest_csv:
                     logger.warning(f"No CSV file found for server {server_id}")
+                    # If we haven't found a CSV file for a while, try reconnecting
+                    if time.time() - last_successful_connection > 300:  # 5 minutes
+                        logger.info(f"No CSV file found for 5 minutes, reconnecting SFTP for server {server_id}")
+                        await sftp_client.disconnect()
+                        await asyncio.sleep(1)
+                        await sftp_client.connect()
+                        last_successful_connection = time.time()
                     await asyncio.sleep(KILLFEED_REFRESH_INTERVAL)
                     continue
                 
@@ -470,6 +533,12 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
                         latest_csv,
                         chunk_size=5000  # Use a reasonable chunk size for better performance
                     )
+                    
+                    # Reset consecutive errors on success
+                    consecutive_errors = 0
+                    reconnect_attempts = 0
+                    backoff_time = 5
+                    last_successful_connection = time.time()
                     
                     # If no new lines, sleep and continue
                     if total_lines <= last_line:
@@ -488,23 +557,46 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
                     # Reconnect after timeout
                     await sftp_client.disconnect()
                     await asyncio.sleep(1)
-                    await sftp_client.connect()
+                    connected = await sftp_client.connect()
+                    if not connected:
+                        logger.error(f"Failed to reconnect after timeout for server {server_id}")
+                        consecutive_errors += 1
+                    await asyncio.sleep(KILLFEED_REFRESH_INTERVAL)
+                    continue
+                except Exception as file_e:
+                    logger.error(f"Error reading CSV file: {file_e}")
+                    consecutive_errors += 1
                     await asyncio.sleep(KILLFEED_REFRESH_INTERVAL)
                     continue
                 
                 if not new_lines:
+                    logger.debug(f"No new lines in CSV file for server {server_id}")
                     await asyncio.sleep(KILLFEED_REFRESH_INTERVAL)
                     continue
                 
                 # Parse new lines
                 kill_events = CSVParser.parse_kill_lines(new_lines)
                 
-                # Process each kill event
-                for kill_event in kill_events:
-                    await process_kill_event(bot, server, kill_event, killfeed_channel)
+                # Log successful parsing
+                if kill_events:
+                    logger.info(f"Parsed {len(kill_events)} kill events from {len(new_lines)} lines for server {server_id}")
                 
-                # Update last processed line
-                await server.update_last_csv_line(last_line + len(new_lines))
+                # Process each kill event
+                processed_events = 0
+                for kill_event in kill_events:
+                    try:
+                        await process_kill_event(bot, server, kill_event, killfeed_channel)
+                        processed_events += 1
+                    except Exception as event_e:
+                        logger.error(f"Error processing kill event: {event_e}", exc_info=True)
+                
+                # Update last processed line only if we successfully processed events
+                if processed_events > 0 or len(kill_events) == 0:
+                    await server.update_last_csv_line(last_line + len(new_lines))
+                    logger.info(f"Updated last CSV line to {last_line + len(new_lines)} for server {server_id}")
+                
+                # Reset consecutive errors on success
+                consecutive_errors = 0
                 
             except asyncio.CancelledError:
                 logger.info(f"Killfeed monitor for server {server_id} cancelled")
@@ -512,6 +604,33 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
                 
             except Exception as e:
                 logger.error(f"Error in killfeed monitor for server {server_id}: {e}", exc_info=True)
+                consecutive_errors += 1
+                
+                # Attempt reconnection if we've had too many consecutive errors
+                if consecutive_errors >= max_consecutive_errors:
+                    if reconnect_attempts < max_reconnect_attempts:
+                        logger.warning(f"Too many consecutive errors ({consecutive_errors}), attempting reconnection for server {server_id}")
+                        try:
+                            await sftp_client.disconnect()
+                            await asyncio.sleep(backoff_time)  # Exponential backoff
+                            connected = await sftp_client.connect()
+                            if connected:
+                                logger.info(f"Successfully reconnected SFTP for server {server_id}")
+                                consecutive_errors = 0
+                                backoff_time = min(backoff_time * 2, 60)  # Exponential backoff with max of 60 seconds
+                            reconnect_attempts += 1
+                        except Exception as reconnect_e:
+                            logger.error(f"Error during reconnection attempt: {reconnect_e}")
+                    else:
+                        logger.error(f"Exceeded maximum reconnection attempts for server {server_id}, stopping monitor")
+                        # Try to notify an admin if possible
+                        try:
+                            guild = bot.get_guild(guild_id)
+                            if guild and guild.owner:
+                                await guild.owner.send(f"⚠️ Killfeed monitor for {server.name} has been stopped due to too many connection failures. Please restart it manually with `/killfeed start`.")
+                        except Exception:
+                            pass  # Silently ignore if we can't message the owner
+                        break
             
             # Sleep before next check
             await asyncio.sleep(KILLFEED_REFRESH_INTERVAL)
@@ -529,6 +648,29 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
             await client.disconnect()
         
         logger.info(f"Killfeed monitor for server {server_id} stopped")
+        
+        # Try to send notification that monitor has stopped
+        try:
+            guild = bot.get_guild(guild_id)
+            if guild:
+                server = await Server.get_by_id(bot.db, server_id, guild_id)
+                if server and server.killfeed_channel_id:
+                    channel = guild.get_channel(server.killfeed_channel_id)
+                    if channel:
+                        guild_model = await Guild.get_by_id(bot.db, guild_id)
+                        embed = EmbedBuilder.create_error_embed(
+                            "Killfeed Monitor Stopped",
+                            f"The killfeed monitor for server {server.name} has stopped.",
+                            guild=guild_model
+                        )
+                        embed.add_field(
+                            name="Restart", 
+                            value="Use `/killfeed start` to restart the monitor.", 
+                            inline=False
+                        )
+                        await channel.send(embed=embed)
+        except Exception as notify_e:
+            logger.warning(f"Could not send shutdown notification: {notify_e}")
 
 
 async def process_kill_event(bot, server, kill_event, channel):
