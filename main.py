@@ -28,6 +28,8 @@ async def main():
             logger.critical("DISCORD_TOKEN environment variable not set. Exiting.")
             return
         
+        # Command syncing is now handled directly in bot.py on_ready event
+        
         await bot.start(token)
     except Exception as e:
         logger.critical(f"Failed to start bot: {e}", exc_info=True)

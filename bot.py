@@ -64,6 +64,14 @@ async def initialize_bot():
         
         # Start background tasks for all registered servers
         await setup_background_tasks(bot)
+        
+        # Sync commands with Discord
+        logger.info("Syncing slash commands with Discord...")
+        try:
+            commands = await bot.tree.sync()
+            logger.info(f"Slash commands synced successfully! Synced {len(commands)} commands.")
+        except Exception as e:
+            logger.error(f"Error syncing commands: {e}", exc_info=True)
 
     @bot.event
     async def on_guild_join(guild):
