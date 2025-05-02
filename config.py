@@ -103,6 +103,46 @@ SUICIDE_MESSAGES = [
     "executed the ultimate shortcut",
 ]
 
+# Type-specific suicide messages
+SUICIDE_MESSAGES_BY_TYPE = {
+    "menu": [
+        "pressed Alt+F4 IRL",
+        "pulled their own plug",
+        "found the 'Respawn' button",
+        "CTD (crashed to death)",
+        "force-quit their existence",
+        "executed /kill in real life",
+        "preferred to start fresh",
+        "performed a hard reset",
+        "unexpectedly terminated",
+        "experienced a critical runtime error"
+    ],
+    "fall": [
+        "discovered gravity works",
+        "forgot how to operate legs",
+        "had a rapid unplanned dismount",
+        "tested fall damage",
+        "tried to fly without wings",
+        "forgot parachutes don't come standard",
+        "performed a terminal velocity check",
+        "thought they could make that jump",
+        "miscalculated the landing zone",
+        "did a high-speed ground inspection"
+    ],
+    "other": [
+        "decided to experiment with their own mortality",
+        "wanted to see the respawn screen",
+        "went out on their own terms",
+        "created a self-inflicted skills issue",
+        "proved they're their own worst enemy",
+        "eliminated the middle man",
+        "chose the path of most resistance",
+        "wanted to start over with a clean slate",
+        "completed a very personal quest",
+        "took self-reliance to the extreme"
+    ]
+}
+
 # Event types and patterns to match in log file
 EVENT_PATTERNS = {
     "mission": r"Mission started: (.+)",
