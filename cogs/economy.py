@@ -93,7 +93,7 @@ class Economy(commands.Cog):
             await ctx.send("Please specify a subcommand.")
     
     @economy.command(name="balance", description="Check your balance")
-    @app_commands.describe(server_id="The server to check balance for")
+    @app_commands.describe(server_id="Select a server to check balance for")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def balance(self, ctx, server_id: str):
         """Check your balance"""
@@ -199,7 +199,7 @@ class Economy(commands.Cog):
             await ctx.send(embed=embed)
     
     @economy.command(name="daily", description="Claim your daily reward")
-    @app_commands.describe(server_id="The server to claim daily reward for")
+    @app_commands.describe(server_id="Select a server to claim daily reward for")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def daily(self, ctx, server_id: str):
         """Claim your daily reward"""
@@ -298,7 +298,7 @@ class Economy(commands.Cog):
             await ctx.send(embed=embed)
     
     @economy.command(name="leaderboard", description="View the richest players")
-    @app_commands.describe(server_id="The server to check leaderboard for")
+    @app_commands.describe(server_id="Select a server to check leaderboard for")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def leaderboard(self, ctx, server_id: str):
         """View the richest players"""
@@ -399,7 +399,7 @@ class Economy(commands.Cog):
     
     @gambling.command(name="blackjack", description="Play blackjack")
     @app_commands.describe(
-        server_id="The server to play on",
+        server_id="Select a server to play on",
         bet="The amount to bet (default: 10)"
     )
     @app_commands.autocomplete(server_id=server_id_autocomplete)
@@ -530,7 +530,7 @@ class Economy(commands.Cog):
     
     @gambling.command(name="slots", description="Play slots")
     @app_commands.describe(
-        server_id="The server to play on",
+        server_id="Select a server to play on",
         bet="The amount to bet (default: 10)"
     )
     @app_commands.autocomplete(server_id=server_id_autocomplete)
@@ -639,7 +639,7 @@ class Economy(commands.Cog):
     
     @economy.command(name="give", description="Give credits to another player")
     @app_commands.describe(
-        server_id="The server",
+        server_id="Select a server",
         user="The user to give credits to",
         amount="The amount to give"
     )

@@ -33,7 +33,7 @@ class Killfeed(commands.Cog):
             await ctx.send("Please specify a subcommand.")
     
     @killfeed.command(name="start", description="Start monitoring killfeed for a server")
-    @app_commands.describe(server_id="The ID of the server to monitor")
+    @app_commands.describe(server_id="Select a server to monitor")
     async def start(self, ctx, server_id: str):
         """Start the killfeed monitor for a server"""
         try:
@@ -71,7 +71,7 @@ class Killfeed(commands.Cog):
             if not server_exists:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
-                    f"Server with ID {server_id} not found in this guild."
+                    f"Server '{server_id}' not found in this guild. Please use an existing server name."
                 , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
@@ -129,7 +129,7 @@ class Killfeed(commands.Cog):
             await ctx.send(embed=embed)
     
     @killfeed.command(name="stop", description="Stop monitoring killfeed for a server")
-    @app_commands.describe(server_id="The ID of the server to stop monitoring")
+    @app_commands.describe(server_id="Select a server to stop monitoring")
     async def stop(self, ctx, server_id: str):
         """Stop the killfeed monitor for a server"""
         
@@ -248,7 +248,7 @@ class Killfeed(commands.Cog):
                 # Add instructions
                 embed.add_field(
                     name="How to Start",
-                    value="Use `/killfeed start <server_id>` to start monitoring a server.",
+                    value="Use `/killfeed start server:<server_name>` to start monitoring a server.",
                     inline=False
                 )
             

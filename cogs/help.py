@@ -63,19 +63,19 @@ class CommandSelect(discord.ui.Select):
             title = "⚙️ Setup Commands"
             description = "Server setup and configuration commands"
             fields = [
-                {"name": "/setup add_server", "value": "Add a new server to track", "inline": False},
-                {"name": "/setup remove_server", "value": "Remove a server from tracking", "inline": False},
-                {"name": "/setup setup_channels", "value": "Configure notification channels for a server", "inline": False},
+                {"name": "/setup add_server <name> <host> <port> <user> <pass> <id>", "value": "Add a new server to track", "inline": False},
+                {"name": "/setup remove_server <server>", "value": "Remove a server from tracking", "inline": False},
+                {"name": "/setup channels <server> [channels...]", "value": "Configure notification channels for a server", "inline": False},
                 {"name": "/setup list_servers", "value": "List all configured servers for this guild", "inline": False},
-                {"name": "/setup historical_parse", "value": "Parse all historical data for a server", "inline": False},
+                {"name": "/setup historical_parse <server>", "value": "Parse all historical data for a server", "inline": False},
             ]
         
         elif category == "Killfeed":
             title = "☠️ Killfeed Commands"
             description = "Killfeed monitoring commands"
             fields = [
-                {"name": "/killfeed start", "value": "Start the killfeed monitor for a server", "inline": False},
-                {"name": "/killfeed stop", "value": "Stop the killfeed monitor for a server", "inline": False},
+                {"name": "/killfeed start <server>", "value": "Start the killfeed monitor for a server", "inline": False},
+                {"name": "/killfeed stop <server>", "value": "Stop the killfeed monitor for a server", "inline": False},
                 {"name": "/killfeed status", "value": "Check the status of killfeed monitors for this guild", "inline": False},
             ]
             
@@ -83,14 +83,14 @@ class CommandSelect(discord.ui.Select):
             title = "🔔 Events Commands"
             description = "Server events monitoring commands"
             fields = [
-                {"name": "/events start", "value": "Start the events monitor for a server", "inline": False},
-                {"name": "/events stop", "value": "Stop the events monitor for a server", "inline": False},
+                {"name": "/events start <server>", "value": "Start the events monitor for a server", "inline": False},
+                {"name": "/events stop <server>", "value": "Stop the events monitor for a server", "inline": False},
                 {"name": "/events status", "value": "Check the status of events monitors for this guild", "inline": False},
-                {"name": "/events list_events", "value": "List recent events for a server", "inline": False},
-                {"name": "/events online_players", "value": "List online players for a server", "inline": False},
-                {"name": "/events configure_events", "value": "Configure which event notifications are enabled", "inline": False},
-                {"name": "/events configure_connections", "value": "Configure which connection notifications are enabled", "inline": False},
-                {"name": "/events configure_suicides", "value": "Configure which suicide notifications are enabled", "inline": False},
+                {"name": "/events list_events <server> [type] [limit]", "value": "List recent events for a server", "inline": False},
+                {"name": "/events online_players <server>", "value": "List online players for a server", "inline": False},
+                {"name": "/events configure_events <server> [options]", "value": "Configure which event notifications are enabled", "inline": False},
+                {"name": "/events configure_connections <server> [options]", "value": "Configure which connection notifications are enabled", "inline": False},
+                {"name": "/events configure_suicides <server> [options]", "value": "Configure which suicide notifications are enabled", "inline": False},
             ]
             
         elif category == "Stats":
@@ -99,11 +99,11 @@ class CommandSelect(discord.ui.Select):
             premium_note = "\n\n**Note:** Requires Premium Tier 2 or higher"
             description += premium_note
             fields = [
-                {"name": "/stats player_stats", "value": "View statistics for a player", "inline": False},
-                {"name": "/stats server_stats", "value": "View statistics for a server", "inline": False},
-                {"name": "/stats leaderboard", "value": "View leaderboards for a specific stat", "inline": False},
-                {"name": "/stats weapon_categories", "value": "View statistics by weapon category", "inline": False},
-                {"name": "/stats weapon_stats", "value": "View statistics for a specific weapon", "inline": False},
+                {"name": "/stats player <server> <player>", "value": "View statistics for a player", "inline": False},
+                {"name": "/stats server <server>", "value": "View statistics for a server", "inline": False},
+                {"name": "/stats leaderboard <server> <stat>", "value": "View leaderboards for a specific stat", "inline": False},
+                {"name": "/stats weapon_categories <server>", "value": "View statistics by weapon category", "inline": False},
+                {"name": "/stats weapon <server> <weapon>", "value": "View statistics for a specific weapon", "inline": False},
             ]
             
         elif category == "Economy":
@@ -112,12 +112,12 @@ class CommandSelect(discord.ui.Select):
             premium_note = "\n\n**Note:** Basic economy requires Premium Tier 1, gambling requires Premium Tier 2"
             description += premium_note
             fields = [
-                {"name": "/economy balance", "value": "Check your balance", "inline": False},
-                {"name": "/economy daily", "value": "Claim your daily reward", "inline": False},
-                {"name": "/economy leaderboard", "value": "View the richest players", "inline": False},
-                {"name": "/economy give", "value": "Give credits to another player", "inline": False},
-                {"name": "/gambling blackjack", "value": "Play blackjack (Premium Tier 2+)", "inline": False},
-                {"name": "/gambling slots", "value": "Play slots (Premium Tier 2+)", "inline": False},
+                {"name": "/economy balance <server>", "value": "Check your balance", "inline": False},
+                {"name": "/economy daily <server>", "value": "Claim your daily reward", "inline": False},
+                {"name": "/economy leaderboard <server>", "value": "View the richest players", "inline": False},
+                {"name": "/economy give <server> <user> <amount>", "value": "Give credits to another player", "inline": False},
+                {"name": "/gambling blackjack <server> [bet]", "value": "Play blackjack (Premium Tier 2+)", "inline": False},
+                {"name": "/gambling slots <server> [bet]", "value": "Play slots (Premium Tier 2+)", "inline": False},
             ]
             
         elif category == "Premium":
@@ -191,7 +191,7 @@ class Help(commands.Cog):
         # Add general info fields
         embed.add_field(
             name="Getting Started",
-            value="1️⃣ Use `/setup add_server` to add a game server\n2️⃣ Configure channels with `/setup setup_channels`\n3️⃣ Start monitoring with `/killfeed start` and `/events start`",
+            value="1️⃣ Use `/setup add_server <name> <host> <port> <user> <pass> <id>` to add a server\n2️⃣ Configure channels with `/setup channels <server>`\n3️⃣ Start monitoring with `/killfeed start <server>` and `/events start <server>`",
             inline=False
         )
         

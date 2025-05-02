@@ -156,7 +156,7 @@ class Events(commands.Cog):
             if not server_exists:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
-                    f"Server '{server_id}' not found in this guild."
+                    f"Server '{server_id}' not found in this guild. Please use an existing server name."
                 , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
@@ -424,7 +424,7 @@ class Events(commands.Cog):
             if not server:
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
-                    f"Server with ID {server_id} not found in this guild."
+                    f"Server '{server_id}' not found in this guild. Please use an existing server name."
                 , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
@@ -541,7 +541,7 @@ class Events(commands.Cog):
             if not server:
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
-                    f"Server with ID {server_id} not found in this guild."
+                    f"Server '{server_id}' not found in this guild. Please use an existing server name."
                 , guild=guild_model)
                 await ctx.send(embed=embed)
                 return

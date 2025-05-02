@@ -158,7 +158,7 @@ class Setup(commands.Cog):
             if not csv_files:
                 embed = EmbedBuilder.create_error_embed(
                     "No CSV Files Found",
-                    "Could not find any CSV files in the server. Please check the server ID and directory structure."
+                    "Could not find any CSV files in the server. Please check the server selection and directory structure."
                 , guild=guild_model)
                 await message.edit(embed=embed)
                 await sftp_client.disconnect()
@@ -217,9 +217,9 @@ class Setup(commands.Cog):
             
             # Add next steps
             next_steps = [
-                "Use `/setup channels <server_id>` to configure notification channels.",
-                "Use `/killfeed start <server_id>` to start monitoring the killfeed.",
-                "If you have premium, use `/events start <server_id>` to monitor game events."
+                "Use `/setup channels <server>` to configure notification channels.",
+                "Use `/killfeed start <server>` to start monitoring the killfeed.",
+                "If you have premium, use `/events start <server>` to monitor game events."
             ]
             embed.add_field(
                 name="Next Steps", 
@@ -272,7 +272,7 @@ class Setup(commands.Cog):
             await ctx.send(embed=embed)
     
     @setup.command(name="removeserver", description="Remove a server")
-    @app_commands.describe(server_id="The ID of the server to remove")
+    @app_commands.describe(server_id="Select a server to remove")
     async def remove_server(self, ctx, server_id: str):
         """Remove a server from tracking"""
         
@@ -426,7 +426,7 @@ class Setup(commands.Cog):
     
     @setup.command(name="channels", description="Configure notification channels for a server")
     @app_commands.describe(
-        server_id="The ID of the server to configure",
+        server_id="Select a server to configure",
         killfeed_channel="Channel for killfeed notifications",
         events_channel="Channel for event notifications",
         connections_channel="Channel for player connection notifications",
@@ -751,7 +751,7 @@ class Setup(commands.Cog):
             await ctx.send(embed=embed)
     
     @setup.command(name="historicalparse", description="Parse all historical data for a server")
-    @app_commands.describe(server_id="The ID of the server to parse historical data for")
+    @app_commands.describe(server_id="Select a server to parse historical data for")
     async def historical_parse(self, ctx, server_id: str):
         """Parse all historical data for a server"""
         

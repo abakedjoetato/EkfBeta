@@ -105,7 +105,7 @@ class Admin(commands.Cog):
             
             # Convert guild ID to int
             try:
-                guild_id = int(guild_id)
+                guild_id_int = int(guild_id)
             except ValueError:
                 embed = EmbedBuilder.create_error_embed(
                     "Invalid Guild ID",
@@ -115,7 +115,7 @@ class Admin(commands.Cog):
                 return
             
             # Get guild data
-            guild = await Guild.get_by_id(self.bot.db, guild_id)
+            guild = await Guild.get_by_id(self.bot.db, guild_id_int)
             if not guild:
                 embed = EmbedBuilder.create_error_embed(
                     "Guild Not Found",
@@ -128,7 +128,7 @@ class Admin(commands.Cog):
             await guild.set_premium_tier(tier)
             
             # Get guild name from bot
-            bot_guild = self.bot.get_guild(guild_id)
+            bot_guild = self.bot.get_guild(guild_id_int)
             guild_name = bot_guild.name if bot_guild else f"Guild {guild_id}"
             
             # Send success message
@@ -257,8 +257,24 @@ class Admin(commands.Cog):
             # Set home guild
             self.bot.home_guild_id = ctx.guild.id
             
-            # Store in environment variable for persistence
+            # Store in environment variable for current session
             os.environ["HOME_GUILD_ID"] = str(ctx.guild.id)
+            
+            # Update the .env file for persistence across restarts
+            try:
+                with open(".env", "r") as f:
+                    lines = f.readlines()
+                
+                with open(".env", "w") as f:
+                    for line in lines:
+                        if line.startswith("HOME_GUILD_ID="):
+                            f.write(f"HOME_GUILD_ID={str(ctx.guild.id)}\n")
+                        else:
+                            f.write(line)
+                            
+                logger.info(f"Updated .env file with new home guild ID: {ctx.guild.id}")
+            except Exception as env_error:
+                logger.error(f"Failed to update .env file: {env_error}", exc_info=True)
             
             # Send success message
             embed = EmbedBuilder.create_success_embed(

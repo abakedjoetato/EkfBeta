@@ -226,7 +226,7 @@ class Stats(commands.Cog):
     
     @stats.command(name="player", description="View player statistics")
     @app_commands.describe(
-        server_id="The server to check stats for",
+        server_id="Select a server to check stats for",
         player_name="The player name to search for"
     )
     @app_commands.autocomplete(
@@ -664,7 +664,7 @@ class Stats(commands.Cog):
             await ctx.send(embed=embed)
     
     @stats.command(name="server", description="View server statistics")
-    @app_commands.describe(server_id="The server to check stats for")
+    @app_commands.describe(server_id="Select a server to check stats for")
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def server_stats(self, ctx, server_id: str):
         """View statistics for a server"""
@@ -763,7 +763,7 @@ class Stats(commands.Cog):
     
     @stats.command(name="leaderboard", description="View player leaderboards")
     @app_commands.describe(
-        server_id="The server to check leaderboards for",
+        server_id="Select a server to check leaderboards for",
         stat="The statistic to rank by",
         limit="Number of players to show (max 25)"
     )
@@ -887,7 +887,7 @@ class Stats(commands.Cog):
     
     @stats.command(name="weapon_categories", description="View statistics by weapon category")
     @app_commands.describe(
-        server_id="The server to check stats for"
+        server_id="Select a server to check stats for"
     )
     @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def weapon_categories(self, ctx, server_id: str):
@@ -938,7 +938,7 @@ class Stats(commands.Cog):
             if not server:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
-                    f"Server {server_id} not found. Please check your server ID."
+                    f"Server {server_id} not found. Please select a valid server."
                 , guild=guild_model)
                 await ctx.send(embed=embed)
                 return
@@ -1034,7 +1034,7 @@ class Stats(commands.Cog):
             
     @stats.command(name="weapon", description="View weapon statistics")
     @app_commands.describe(
-        server_id="The server to check stats for",
+        server_id="Select a server to check stats for",
         weapon_name="The weapon to view statistics for"
     )
     @app_commands.autocomplete(

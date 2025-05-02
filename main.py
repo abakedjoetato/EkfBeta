@@ -5,7 +5,11 @@ Main entry point for the application
 import asyncio
 import logging
 import os
+from dotenv import load_dotenv
 from bot import initialize_bot
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
