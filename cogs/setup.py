@@ -528,14 +528,24 @@ class Setup(commands.Cog):
             # Defer response to prevent timeout
             await ctx.defer()
             
+            logger.info(f"Setting up channels for server {server_id} in guild {ctx.guild.id}")
+            logger.info(f"Input channels - Killfeed: {killfeed_channel.id if killfeed_channel else None}, " +
+                        f"Events: {events_channel.id if events_channel else None}, " +
+                        f"Connections: {connections_channel.id if connections_channel else None}, " +
+                        f"Economy: {economy_channel.id if economy_channel else None}, " +
+                        f"Voice: {voice_status_channel.id if voice_status_channel else None}")
+            
             # Get guild model for themed embed
-
             guild_data = None
             guild_model = None
             try:
                 guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
                 if guild_data:
+                    logger.info(f"Found guild data in MongoDB: {guild_data.get('name')} with " +
+                               f"{len(guild_data.get('servers', []))} servers")
                     guild_model = Guild(self.bot.db, guild_data)
+                else:
+                    logger.warning(f"Guild data not found for guild ID: {ctx.guild.id}")
             except Exception as e:
                 logger.warning(f"Error getting guild model: {e}")
 
@@ -546,6 +556,7 @@ class Setup(commands.Cog):
             # Get guild
             guild = await Guild.get_by_id(self.bot.db, ctx.guild.id)
             if not guild:
+                logger.error(f"Guild {ctx.guild.id} not found in database")
                 embed = EmbedBuilder.create_error_embed(
                     "Guild Not Set Up",
                     "This guild is not set up. Please add a server first."
@@ -554,13 +565,21 @@ class Setup(commands.Cog):
                 return
             
             # Check if server exists
+            logger.info(f"Searching for server {server_id} in guild {ctx.guild.id}")
             server = None
-            for s in guild.servers:
-                if s.get("server_id") == server_id:
-                    server = Server(self.bot.db, s)
-                    break
+            if hasattr(guild, 'servers') and guild.servers:
+                logger.info(f"Guild has {len(guild.servers)} servers: {[s.get('server_id') for s in guild.servers]}")
+                for s in guild.servers:
+                    logger.info(f"Checking server data: {s.get('server_id')} == {server_id}?")
+                    if s.get("server_id") == server_id:
+                        logger.info(f"Found matching server: {s.get('server_name')}")
+                        server = Server(self.bot.db, s)
+                        break
+            else:
+                logger.warning(f"Guild {ctx.guild.id} has no servers attribute or it's empty")
             
             if not server:
+                logger.error(f"Server with ID '{server_id}' not found in guild {ctx.guild.id}")
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID '{server_id}' not found in this guild."
@@ -617,6 +636,7 @@ class Setup(commands.Cog):
             
             # Check if any updates were provided
             if not update_data:
+                logger.warning("No channel updates provided")
                 embed = EmbedBuilder.create_error_embed(
                     "No Changes",
                     "No channel updates were provided."
@@ -624,10 +644,14 @@ class Setup(commands.Cog):
                 await ctx.send(embed=embed)
                 return
             
+            # Log the update attempt
+            logger.info(f"Attempting to update server {server_id} with channel data: {update_data}")
+            
             # Update server
             updated = await server.update(update_data)
             
             if updated:
+                logger.info(f"Successfully updated channels for server {server_id}")
                 embed = EmbedBuilder.create_success_embed(
                     "Channels Updated",
                     f"Channels for '{server.name}' have been updated successfully."
@@ -641,11 +665,49 @@ class Setup(commands.Cog):
                         inline=False
                     )
                 
+                # Try to restart any running monitoring tasks to pick up the new channels
+                try:
+                    # Restart killfeed monitor if it's running
+                    killfeed_task_name = f"killfeed_{ctx.guild.id}_{server_id}"
+                    if killfeed_task_name in self.bot.background_tasks:
+                        logger.info(f"Cancelling existing killfeed monitor for server {server_id}")
+                        self.bot.background_tasks[killfeed_task_name].cancel()
+                        
+                        # Import the necessary function
+                        from cogs.killfeed import start_killfeed_monitor
+                        
+                        # Start a new task
+                        logger.info(f"Starting new killfeed monitor for server {server_id}")
+                        new_task = asyncio.create_task(
+                            start_killfeed_monitor(self.bot, ctx.guild.id, server_id)
+                        )
+                        self.bot.background_tasks[killfeed_task_name] = new_task
+                    
+                    # Restart events monitor if it's running
+                    events_task_name = f"events_{ctx.guild.id}_{server_id}"
+                    if events_task_name in self.bot.background_tasks:
+                        logger.info(f"Cancelling existing events monitor for server {server_id}")
+                        self.bot.background_tasks[events_task_name].cancel()
+                        
+                        # Import the necessary function
+                        from cogs.events import start_events_monitor
+                        
+                        # Start a new task
+                        logger.info(f"Starting new events monitor for server {server_id}")
+                        new_task = asyncio.create_task(
+                            start_events_monitor(self.bot, ctx.guild.id, server_id)
+                        )
+                        self.bot.background_tasks[events_task_name] = new_task
+                except Exception as restart_e:
+                    logger.error(f"Error restarting monitors: {restart_e}")
+                    # This is non-fatal, so we continue
+                
                 await ctx.send(embed=embed)
             else:
+                logger.error(f"Failed to update channels for server {server_id}")
                 embed = EmbedBuilder.create_error_embed(
                     "Update Failed",
-                    "Failed to update server channels."
+                    "Failed to update server channels. Check the server configuration."
                 , guild=guild_model)
                 await ctx.send(embed=embed)
             

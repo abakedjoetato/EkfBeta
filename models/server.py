@@ -106,23 +106,43 @@ class Server:
         # Set updated timestamp
         update_data["updated_at"] = datetime.utcnow().isoformat()
         
+        # Log the update operation for debugging
+        logger.info(f"Updating server {self.id} in guild {self.guild_id} with data: {update_data}")
+        
         # Update specific fields in the server document within the guild
-        result = await self.db.guilds.update_one(
-            {
-                "guild_id": str(self.guild_id),
-                "servers.server_id": self.id
-            },
-            {"$set": {f"servers.$.{key}": value for key, value in update_data.items()}}
-        )
-        
-        # Update local data
-        if result.modified_count > 0:
-            for key, value in update_data.items():
-                setattr(self, key, value)
-                self.data[key] = value
-            return True
-        
-        return False
+        try:
+            result = await self.db.guilds.update_one(
+                {
+                    "guild_id": str(self.guild_id),
+                    "servers.server_id": self.id
+                },
+                {"$set": {f"servers.$.{key}": value for key, value in update_data.items()}}
+            )
+            
+            logger.info(f"MongoDB update result: matched={result.matched_count}, modified={result.modified_count}")
+            
+            # Update local data
+            if result.matched_count > 0:
+                for key, value in update_data.items():
+                    setattr(self, key, value)
+                    self.data[key] = value
+                return True
+            else:
+                # If no document was matched, the server might be missing
+                logger.error(f"Failed to update server {self.id}: No matching document found in MongoDB")
+                # Let's validate that the server exists in the database
+                guild_doc = await self.db.guilds.find_one({"guild_id": str(self.guild_id)})
+                if guild_doc:
+                    server_exists = any(s.get("server_id") == self.id for s in guild_doc.get("servers", []))
+                    logger.info(f"Server existence check: {'Exists' if server_exists else 'Not found'} in guild doc")
+                else:
+                    logger.error(f"Guild {self.guild_id} not found in MongoDB")
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"MongoDB update error: {e}", exc_info=True)
+            return False
     
     async def delete(self) -> bool:
         """Delete the server"""
