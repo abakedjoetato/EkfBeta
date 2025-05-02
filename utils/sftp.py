@@ -51,9 +51,9 @@ class SFTPClient:
             self.sftp = self.client.open_sftp()
             logger.info(f"Connected to SFTP server: {self.host}:{self.port} for server {self.server_id}")
             
-            # Set root path to current directory to avoid hanging on recursive search
-            self.root_path = '.'
-            logger.info(f"Using current directory as root path for server {self.server_id}")
+            # Try to find the appropriate root directory for this server
+            logger.info(f"Searching for server directory for server ID: {self.server_id}")
+            await self.find_root_path()
             
             self.connected = True
             self.last_error = None
@@ -78,17 +78,48 @@ class SFTPClient:
             return False
     
     async def find_root_path(self):
-        """Find the root path containing host_serverID pattern"""
+        """Find the root path containing host_serverID or IP_serverID pattern"""
         try:
             # Start from current directory
             current_path = '.'
-            pattern = f"host_{self.server_id}"
+            self.root_path = None
             
-            # Recursively search for the pattern in directory names
-            await self._find_path_recursive(current_path, pattern, max_depth=3)
+            # Extract IP address from host (remove port if present)
+            ip_address = self.host.split(':')[0]
+            
+            # Create patterns to try (both host_ pattern and IP_ pattern)
+            patterns = [
+                f"{ip_address}_{self.server_id}",   # IP_serverID format (e.g., "79.127.236.1_7020")
+                f"host_{self.server_id}"            # Legacy host_serverID format
+            ]
+            
+            logger.info(f"Searching for directory patterns: {patterns}")
+            
+            # Direct search in the root directory (no recursion)
+            try:
+                items = self.sftp.listdir(current_path)
+                logger.info(f"Found {len(items)} items in root directory")
+                
+                for item in items:
+                    # Check if the item name matches our patterns
+                    for pattern in patterns:
+                        if pattern in item:
+                            self.root_path = os.path.join(current_path, item)
+                            logger.info(f"Found matching directory: {self.root_path}")
+                            return
+            except Exception as dir_e:
+                logger.error(f"Error listing root directory: {dir_e}")
             
             if not self.root_path:
-                logger.warning(f"Could not find root path with pattern '{pattern}'. Using current directory.")
+                # If no match found, fall back to recursive search (limited depth)
+                for pattern in patterns:
+                    await self._find_path_recursive(current_path, pattern, max_depth=2)
+                    if self.root_path:
+                        logger.info(f"Found matching directory with recursive search: {self.root_path}")
+                        return
+            
+            if not self.root_path:
+                logger.warning(f"Could not find root path with any pattern {patterns}. Using current directory.")
                 self.root_path = '.'
                 
         except Exception as e:
@@ -196,70 +227,102 @@ class SFTPClient:
         
         try:
             csv_files = []
-            # Search for CSV files in the root directory
-            logger.info(f"Looking for CSV files in {self.root_path} with pattern {CSV_FILENAME_PATTERN}")
             
-            try:
-                # Get directory listing
-                files = self.sftp.listdir(self.root_path)
-                logger.info(f"Found {len(files)} files in directory: {', '.join(files[:5])}{'...' if len(files) > 5 else ''}")
-                
-                # Be more flexible with the CSV pattern - check if any file ends with .csv
-                for filename in files:
-                    logger.info(f"Checking file: {filename}, ends with .csv: {filename.lower().endswith('.csv')}")
-                    # First try the exact pattern
-                    pattern_match = re.match(CSV_FILENAME_PATTERN, filename)
-                    # If it doesn't match, just check if it ends with .csv
-                    if pattern_match or filename.lower().endswith('.csv'):
-                        file_path = os.path.join(self.root_path, filename)
-                        logger.info(f"Found matching CSV file: {filename}")
-                        # Parse timestamp from filename
-                        timestamp_str = filename.split(".csv")[0]
-                        try:
-                            # Try the standard format first
-                            timestamp = None
-                            try:
-                                timestamp = datetime.datetime.strptime(timestamp_str, "%Y.%m.%d-%H.%M.%S")
-                            except ValueError:
-                                # Try alternative formats (be more flexible)
-                                formats_to_try = [
-                                    "%Y-%m-%d_%H-%M-%S",
-                                    "%Y%m%d_%H%M%S",
-                                    "%Y%m%d%H%M%S",
-                                    "%Y-%m-%d"
-                                ]
-                                
-                                for fmt in formats_to_try:
-                                    try:
-                                        timestamp = datetime.datetime.strptime(timestamp_str, fmt)
-                                        logger.info(f"Parsed timestamp using format: {fmt}")
-                                        break
-                                    except ValueError:
-                                        continue
-                            
-                            # If we couldn't parse a timestamp, use file creation time instead
-                            if not timestamp:
-                                # Use current time as fallback
-                                logger.warning(f"Could not parse any timestamp format from {filename}, using current time")
-                                timestamp = datetime.datetime.now()
-                                
-                            csv_files.append((file_path, timestamp, filename))
-                        except Exception as ve:
-                            logger.warning(f"Error processing CSV file {filename}: {ve}")
-                            # Still add it with current timestamp so we don't miss any files
-                            timestamp = datetime.datetime.now()
-                            csv_files.append((file_path, timestamp, filename))
-            except Exception as inner_e:
-                logger.error(f"Error listing directory {self.root_path}: {inner_e}", exc_info=True)
-                self.last_error = f"Could not list directory: {str(inner_e)}"
+            # First check if the specified server directory exists
+            target_directory = None
+            
+            # List root directory to search for our server directory
+            logger.info("Searching for server directory in root...")
+            root_files = self.sftp.listdir(".")
+            logger.info(f"Found {len(root_files)} items in root directory")
+            
+            # Look for the server ID pattern (IP_serverID or host_serverID)
+            for item in root_files:
+                if (f"{self.host.split(':')[0]}_{self.server_id}" in item) or (f"host_{self.server_id}" in item):
+                    # Found matching directory
+                    target_directory = os.path.join(".", item)
+                    logger.info(f"Found server directory: {target_directory}")
+                    break
+            
+            if not target_directory:
+                logger.error(f"Could not find server directory for server ID: {self.server_id}")
+                self.last_error = f"Server directory for ID {self.server_id} not found"
                 return []
+            
+            # Now we have the target directory, explore it to find CSV files
+            # We'll do a recursive exploration to handle multiple map directories
+            logger.info(f"Starting deep exploration of server directory: {target_directory}")
+            
+            # First check for CSV files in the main server directory
+            try:
+                items = self.sftp.listdir(target_directory)
+                logger.info(f"Server directory contains {len(items)} items")
+                
+                # Check for any CSV files in the main directory
+                for item in items:
+                    if item.lower().endswith('.csv'):
+                        file_path = os.path.join(target_directory, item)
+                        logger.info(f"Found CSV file in server main directory: {item}")
+                        timestamp = datetime.datetime.now()
+                        csv_files.append((file_path, timestamp, item))
+            except Exception as e:
+                logger.error(f"Error listing main server directory: {e}")
+                return []
+            
+            # Now search all subdirectories (including map-specific directories)
+            discovered_csv_paths = await self._find_csv_files_recursive(target_directory)
+            
+            # Process all discovered CSV files
+            for file_path in discovered_csv_paths:
+                try:
+                    # Extract the filename from the path
+                    filename = os.path.basename(file_path)
+                    logger.info(f"Processing discovered CSV file: {filename} at {file_path}")
+                    
+                    # Try to parse timestamp from filename
+                    timestamp_str = filename.split(".csv")[0]
+                    timestamp = None
+                    
+                    # Try various timestamp formats
+                    formats_to_try = [
+                        "%Y.%m.%d-%H.%M.%S",
+                        "%Y-%m-%d_%H-%M-%S",
+                        "%Y%m%d_%H%M%S",
+                        "%Y%m%d%H%M%S",
+                        "%Y-%m-%d"
+                    ]
+                    
+                    for fmt in formats_to_try:
+                        try:
+                            timestamp = datetime.datetime.strptime(timestamp_str, fmt)
+                            logger.info(f"Parsed timestamp using format: {fmt}")
+                            break
+                        except ValueError:
+                            continue
+                    
+                    # If we couldn't parse a timestamp, use current time
+                    if not timestamp:
+                        logger.warning(f"Could not parse timestamp from {filename}, using current time")
+                        timestamp = datetime.datetime.now()
+                    
+                    csv_files.append((file_path, timestamp, filename))
+                except Exception as ve:
+                    logger.warning(f"Error processing CSV file {file_path}: {ve}")
+                    # Still add with current timestamp
+                    timestamp = datetime.datetime.now()
+                    filename = os.path.basename(file_path)
+                    csv_files.append((file_path, timestamp, filename))
             
             # Sort by timestamp (oldest first)
             csv_files.sort(key=lambda x: x[1])
             
             if not csv_files:
-                logger.warning(f"No CSV files found matching pattern {CSV_FILENAME_PATTERN}")
-                self.last_error = "No CSV files found with correct naming pattern"
+                logger.warning(f"No CSV files found in any directory or subdirectory")
+                self.last_error = "No CSV files found"
+            else:
+                logger.info(f"Found {len(csv_files)} CSV files across all directories")
+                for file_path, timestamp, filename in csv_files:
+                    logger.info(f"CSV file: {file_path} (timestamp: {timestamp})")
             
             return [file_path for file_path, _, _ in csv_files]
                 
@@ -267,6 +330,43 @@ class SFTPClient:
             logger.error(f"Error getting all CSV files: {e}", exc_info=True)
             self.last_error = f"Error searching for CSV files: {str(e)}"
             return []
+    
+    async def _find_csv_files_recursive(self, directory, max_depth=3, current_depth=0):
+        """Recursively search for CSV files in all subdirectories"""
+        if current_depth > max_depth:
+            return []
+            
+        csv_files = []
+        
+        try:
+            # Get directory contents
+            items = self.sftp.listdir(directory)
+            
+            # Process each item
+            for item in items:
+                item_path = os.path.join(directory, item)
+                
+                try:
+                    # Check if it's a CSV file
+                    if item.lower().endswith('.csv'):
+                        logger.info(f"Found CSV file: {item} in directory: {directory}")
+                        csv_files.append(item_path)
+                    
+                    # Check if it's a directory and process recursively
+                    elif self._is_dir(item_path):
+                        logger.info(f"Exploring subdirectory: {item_path} (depth {current_depth})")
+                        subdirectory_files = await self._find_csv_files_recursive(
+                            item_path, max_depth, current_depth + 1
+                        )
+                        csv_files.extend(subdirectory_files)
+                except Exception as item_e:
+                    logger.warning(f"Error processing item {item_path}: {item_e}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"Error listing directory {directory}: {e}")
+            
+        return csv_files
     
     async def get_log_file(self):
         """Get the path to the Deadside.log file"""
@@ -276,17 +376,80 @@ class SFTPClient:
             return None
         
         try:
-            log_path = os.path.join(self.root_path, LOG_FILENAME)
-            # Check if file exists
-            try:
-                self.sftp.stat(log_path)
+            # First find the server directory (same logic as in get_all_csv_files)
+            target_directory = None
+            
+            # List root directory
+            logger.info("Searching for server directory in root to find log file...")
+            root_files = self.sftp.listdir(".")
+            
+            # Look for the server ID pattern
+            for item in root_files:
+                if (f"{self.host.split(':')[0]}_{self.server_id}" in item) or (f"host_{self.server_id}" in item):
+                    # Found matching directory
+                    target_directory = os.path.join(".", item)
+                    logger.info(f"Found server directory for logs: {target_directory}")
+                    break
+            
+            if not target_directory:
+                logger.error(f"Could not find server directory for server ID: {self.server_id}")
+                return None
+            
+            # Do recursive search for log file similar to CSV file search
+            logger.info(f"Starting deep search for log file in: {target_directory}")
+            log_path = await self._find_log_file_recursive(target_directory)
+            
+            if log_path:
+                logger.info(f"Found log file at: {log_path}")
                 return log_path
-            except FileNotFoundError:
-                logger.warning(f"Log file not found at {log_path}")
+            else:
+                logger.warning(f"Log file {LOG_FILENAME} not found in any directory")
                 return None
                 
         except Exception as e:
             logger.error(f"Error getting log file: {e}", exc_info=True)
+            return None
+    
+    async def _find_log_file_recursive(self, directory, max_depth=3, current_depth=0):
+        """Recursively search for the log file in all subdirectories"""
+        if current_depth > max_depth:
+            return None
+        
+        try:
+            # Check for log file in current directory
+            items = self.sftp.listdir(directory)
+            
+            # Check if log file exists in this directory
+            if LOG_FILENAME in items:
+                log_path = os.path.join(directory, LOG_FILENAME)
+                logger.info(f"Found log file in directory: {directory}")
+                return log_path
+            
+            # Check all subdirectories
+            for item in items:
+                item_path = os.path.join(directory, item)
+                
+                try:
+                    # Check if it's a directory
+                    if self._is_dir(item_path):
+                        logger.info(f"Checking subdirectory for log file: {item_path} (depth {current_depth})")
+                        # Search recursively
+                        log_path = await self._find_log_file_recursive(
+                            item_path, max_depth, current_depth + 1
+                        )
+                        
+                        # If found, return the path
+                        if log_path:
+                            return log_path
+                except Exception as e:
+                    logger.warning(f"Error checking subdirectory {item_path}: {e}")
+                    continue
+            
+            # No log file found in this directory or its subdirectories
+            return None
+                
+        except Exception as e:
+            logger.error(f"Error exploring directory {directory} for log file: {e}")
             return None
     
     async def read_file(self, file_path, start_line=0, max_lines=None):

@@ -48,7 +48,8 @@ SFTP_CONNECTION_SETTINGS = {
 }
 
 # SFTP CSV and log file patterns
-CSV_FILENAME_PATTERN = r"\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.csv"
+# This is the standard pattern, but we'll also check for any file ending with .csv
+CSV_FILENAME_PATTERN = r".*\.csv$"
 LOG_FILENAME = "Deadside.log"
 
 # CSV file structure
