@@ -991,7 +991,9 @@ class Setup(commands.Cog):
             # Get server
             server = None
             for s in guild_data.get("servers", []):
-                if s.get("server_id") == server_id:
+                server_id_from_db = s.get("server_id")
+                # Ensure string comparison for compatibility with autocomplete
+                if str(server_id_from_db) == str(server_id):
                     server = Server(self.bot.db, s)
                     break
             
