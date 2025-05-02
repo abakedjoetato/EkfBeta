@@ -22,7 +22,11 @@ logger = logging.getLogger(__name__)
 async def main():
     """Main function to run the Discord bot"""
     try:
-        bot = await initialize_bot()
+        # Force a global sync of commands when starting the bot
+        # This is particularly useful when switching between test and production bots
+        force_sync = True
+        
+        bot = await initialize_bot(force_sync=force_sync)
         token = os.getenv("DISCORD_TOKEN")
         if not token:
             logger.critical("DISCORD_TOKEN environment variable not set. Exiting.")

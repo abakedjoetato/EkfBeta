@@ -228,6 +228,39 @@ class Setup(commands.Cog):
             await message.edit(embed=embed)
             await sftp_client.disconnect()
             
+            # Check if guild has stats feature and start historical parsing if available
+            try:
+                if guild.check_feature_access("stats"):
+                    # Update the message with parsing info
+                    embed = EmbedBuilder.create_info_embed(
+                        "Historical Parse Starting",
+                        f"Starting automatic historical data parsing for server '{server_name}'."
+                        + "\n\nThis process will run in the background and may take some time depending on the amount of data."
+                    , guild=guild_model)
+                    await message.edit(embed=embed)
+                    
+                    # Create the server object for historical parsing
+                    server = None
+                    for s in guild.servers:
+                        if s.get("server_id") == server_id:
+                            server = Server(self.bot.db, s)
+                            break
+                    
+                    if server:
+                        # Start background task for historical parsing
+                        task = asyncio.create_task(self._historical_parse_task(server, message))
+                        
+                        # Store task
+                        task_name = f"historical_{ctx.guild.id}_{server_id}"
+                        self.bot.background_tasks[task_name] = task
+                        
+                        # Clean up task when done
+                        task.add_done_callback(lambda t: self.bot.background_tasks.pop(task_name, None))
+                        logger.info(f"Started automatic historical parsing for server {server_id} in guild {ctx.guild.id}")
+            except Exception as parse_e:
+                logger.error(f"Error starting automatic historical parse: {parse_e}", exc_info=True)
+                # We don't want to fail the server add if historical parsing fails, so just log the error
+            
         except Exception as e:
             logger.error(f"Error adding server: {e}", exc_info=True)
             embed = EmbedBuilder.create_error_embed(

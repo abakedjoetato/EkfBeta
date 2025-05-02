@@ -285,6 +285,24 @@ class EmbedBuilder:
         if not guild or not hasattr(guild, 'theme') or guild.theme == "default":
             embed.color = discord.Color.green()
         return embed
+        
+    @staticmethod
+    def create_info_embed(title, description, guild=None):
+        """Create an embed for information messages
+        
+        Args:
+            title: The title of the embed
+            description: The description of the embed
+            guild: Optional guild object to use theme from
+            
+        Returns:
+            discord.Embed: The created embed with info styling
+        """
+        # Use base embed for consistent theming
+        embed = EmbedBuilder.create_base_embed(title, description, guild)
+        # For info embeds, we'll use blue
+        embed.color = discord.Color.blue()
+        return embed
     
     @staticmethod
     def create_progress_embed(title, description, progress=None, total=None, guild=None):

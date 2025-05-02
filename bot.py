@@ -12,8 +12,12 @@ from utils.db import initialize_db
 
 logger = logging.getLogger(__name__)
 
-async def initialize_bot():
-    """Initialize and configure the Discord bot instance"""
+async def initialize_bot(force_sync=False):
+    """Initialize and configure the Discord bot instance
+    
+    Args:
+        force_sync: Force a full sync of commands globally
+    """
     # Set up intents
     intents = discord.Intents.default()
     for intent_name in INTENTS:
@@ -31,6 +35,9 @@ async def initialize_bot():
         help_command=None,
         application_id=os.getenv("BOT_APPLICATION_ID")  # Add application ID for slash commands
     )
+    
+    # Store the force_sync flag for later use
+    bot.force_sync = force_sync
 
     # Initialize database connection
     db = await initialize_db()
@@ -69,8 +76,15 @@ async def initialize_bot():
         # Sync commands with Discord
         logger.info("Syncing slash commands with Discord...")
         try:
-            commands = await bot.tree.sync()
-            logger.info(f"Slash commands synced successfully! Synced {len(commands)} commands.")
+            # If force_sync is True, sync globally with guild=None
+            if getattr(bot, 'force_sync', False):
+                logger.info("Performing a global force sync of commands...")
+                commands = await bot.tree.sync(guild=None)
+                logger.info(f"Slash commands force synced globally! Synced {len(commands)} commands.")
+            else:
+                # Normal sync otherwise
+                commands = await bot.tree.sync()
+                logger.info(f"Slash commands synced successfully! Synced {len(commands)} commands.")
         except Exception as e:
             logger.error(f"Error syncing commands: {e}", exc_info=True)
 
