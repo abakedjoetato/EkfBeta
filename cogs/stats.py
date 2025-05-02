@@ -610,23 +610,16 @@ class Stats(commands.Cog):
     async def server_stats(self, ctx, server_id: str):
         """View statistics for a server"""
         
-    try:
-
-        # Get guild model for themed embed
-
-        guild_data = None
-
-        guild_model = None
-
         try:
-
-        guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
-
-        if guild_data:
-
-        guild_model = Guild(self.bot.db, guild_data)
-        except Exception as e:
-            logger.warning(f"Error getting guild model: {e}")
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
 
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
@@ -725,23 +718,16 @@ class Stats(commands.Cog):
     async def leaderboard(self, ctx, server_id: str, stat: str, limit: int = 10):
         """View leaderboards for a specific stat"""
         
-    try:
-
-        # Get guild model for themed embed
-
-        guild_data = None
-
-        guild_model = None
-
         try:
-
-        guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
-
-        if guild_data:
-
-        guild_model = Guild(self.bot.db, guild_data)
-        except Exception as e:
-            logger.warning(f"Error getting guild model: {e}")
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
 
             # Validate limit
             if limit < 1:
@@ -844,23 +830,16 @@ class Stats(commands.Cog):
     async def weapon_categories(self, ctx, server_id: str):
         """View statistics by weapon category"""
         
-    try:
-
-        # Get guild model for themed embed
-
-        guild_data = None
-
-        guild_model = None
-
         try:
-
-        guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
-
-        if guild_data:
-
-        guild_model = Guild(self.bot.db, guild_data)
-        except Exception as e:
-            logger.warning(f"Error getting guild model: {e}")
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
 
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
@@ -997,23 +976,16 @@ class Stats(commands.Cog):
     async def weapon_stats(self, ctx, server_id: str, weapon_name: str):
         """View statistics for a specific weapon"""
         
-    try:
-
-        # Get guild model for themed embed
-
-        guild_data = None
-
-        guild_model = None
-
         try:
-
-        guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
-
-        if guild_data:
-
-        guild_model = Guild(self.bot.db, guild_data)
-        except Exception as e:
-            logger.warning(f"Error getting guild model: {e}")
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
 
             # Get guild data
             guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})

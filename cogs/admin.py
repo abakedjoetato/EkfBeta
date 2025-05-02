@@ -33,15 +33,15 @@ class Admin(commands.Cog):
     async def setrole(self, ctx, role: discord.Role):
         """Set the admin role for server management"""
         try:
-        # Get guild model for themed embed
-        guild_data = None
-        guild_model = None
-        try:
-            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
-            if guild_data:
-                guild_model = Guild(self.bot.db, guild_data)
-        except Exception as e:
-            logger.warning(f"Error getting guild model: {e}")
+            # Get guild model for themed embed
+            guild_data = None
+            guild_model = None
+            try:
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
 
             # Get guild data
             guild = await Guild.get_by_id(self.bot.db, ctx.guild.id)
@@ -75,22 +75,15 @@ class Admin(commands.Cog):
         """Set the premium tier for a guild (Home Guild Admins only)"""
         
         try:
-
             # Get guild model for themed embed
-
             guild_data = None
-
             guild_model = None
-
             try:
-
-            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
-
-            if guild_data:
-
-            guild_model = Guild(self.bot.db, guild_data)
-        except Exception as e:
-            logger.warning(f"Error getting guild model: {e}")
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
 
             # Check if user is a home guild admin
             if not is_home_guild_admin(self.bot, ctx.author.id):
@@ -158,22 +151,15 @@ class Admin(commands.Cog):
         """View bot status information"""
         
         try:
-
             # Get guild model for themed embed
-
             guild_data = None
-
             guild_model = None
-
             try:
-
-            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
-
-            if guild_data:
-
-            guild_model = Guild(self.bot.db, guild_data)
-        except Exception as e:
-            logger.warning(f"Error getting guild model: {e}")
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
 
             # Get basic statistics
             guild_count = len(self.bot.guilds)
@@ -238,22 +224,15 @@ class Admin(commands.Cog):
         """Set the current guild as the home guild (Bot Owner only)"""
         
         try:
-
             # Get guild model for themed embed
-
             guild_data = None
-
             guild_model = None
-
             try:
-
-            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
-
-            if guild_data:
-
-            guild_model = Guild(self.bot.db, guild_data)
-        except Exception as e:
-            logger.warning(f"Error getting guild model: {e}")
+                guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+                if guild_data:
+                    guild_model = Guild(self.bot.db, guild_data)
+            except Exception as e:
+                logger.warning(f"Error getting guild model: {e}")
 
             # Check if user is the bot owner
             if ctx.author.id != self.bot.owner_id:
@@ -292,6 +271,16 @@ class Admin(commands.Cog):
     @admin.command(name="help", description="Show help for admin commands")
     async def admin_help(self, ctx):
         """Show help for admin commands"""
+        # Get guild model for themed embed
+        guild_data = None
+        guild_model = None
+        try:
+            guild_data = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+            if guild_data:
+                guild_model = Guild(self.bot.db, guild_data)
+        except Exception as e:
+            logger.warning(f"Error getting guild model: {e}")
+        
         embed = EmbedBuilder.create_base_embed(
             "Admin Commands Help",
             "List of available admin commands and their usage"
