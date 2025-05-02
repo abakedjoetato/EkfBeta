@@ -1,0 +1,60 @@
+You are tasked with building a highly advanced, multi-guild PvP statistics and event tracking Discord bot. This bot is designed to be modular, scalable, user-friendly, and exceed all other bots in complexity, depth, and customization.
+
+You MUST follow the accompanying .md file (uploaded as PvP_Stats_Bot_Manual.md) as a live instruction manual. Re-check it every minute to ensure adherence. It outlines all major systems, expectations, user experience goals, and technical requirements.
+
+Your tasks:
+
+1. Reference and follow the entire manual exactly.
+
+
+2. Use only best practices—no monkey patches, fix scripts, or shortcuts.
+
+
+3. Use the latest Discord Python library (Pycord), MongoDB with Motor (async), and Python 3.11+.
+
+
+4. Implement the following core features:
+
+Multi-server, multi-guild support with unique SFTP connection handling.
+
+Historical CSV parser with memory for last line processed.
+
+Live Killfeed and Events parser with randomized suicide messages.
+
+Role-based permissions, customizable commands, faction tracking, and automated stats.
+
+Premium system that controls features and limits by guild.
+
+Economy and gambling (blackjack and slots) systems using earned currency from in-game kills.
+
+Embeds with survival game theme, using buttons, pagination, modals, and modern UI.
+
+
+
+
+Important Directives:
+
+Any commands with long processing must return instantly and update results asynchronously.
+
+Use efficient background jobs where required.
+
+Prevent output spam during initial server syncs (first read must silently parse until live line is reached).
+
+Optimize for ≤10 checkpoints in Replit, if using Replit.
+
+Be wary of MongoDB boolean logic issues.
+
+Do not add a web server or web interface.
+
+Assume .csv and .log samples are uploaded and use them to build perfect parsers using normalization and logic.
+
+Design everything to be massively scalable to hundreds of guilds and 1000+ server connections.
+
+Make the experience extremely customizable and intuitive for guild and home guild admins.
+
+
+Challenge:
+
+Your goal is to build a production-ready, highly complex, modular PvP statistics Discord bot using only the manual and your best judgment.
+
+Now begin development, referencing the manual every minute to verify alignment with requirements.
