@@ -28,7 +28,8 @@ async def initialize_bot():
             type=discord.ActivityType.watching,
             name=ACTIVITY
         ),
-        help_command=None
+        help_command=None,
+        application_id=os.getenv("BOT_APPLICATION_ID")  # Add application ID for slash commands
     )
 
     # Initialize database connection
