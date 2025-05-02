@@ -94,13 +94,17 @@ async def player_name_autocomplete(interaction, current):
         server_id = None
         for option in interaction.data.get("options", []):
             if option.get("name") == "server_id":
-                server_id = option.get("value")
+                raw_id = option.get("value")
+                server_id = str(raw_id) if raw_id is not None else None
+                logger.debug(f"player_name_autocomplete converting server_id from {type(raw_id).__name__} to string: {server_id}")
                 break
             
             # Check in subcommands
             for suboption in option.get("options", []):
                 if suboption.get("name") == "server_id":
-                    server_id = suboption.get("value")
+                    raw_id = suboption.get("value")
+                    server_id = str(raw_id) if raw_id is not None else None
+                    logger.debug(f"player_name_autocomplete (subcommand) converting server_id from {type(raw_id).__name__} to string: {server_id}")
                     break
         
         if not server_id:
@@ -116,7 +120,7 @@ async def player_name_autocomplete(interaction, current):
             
             # Fetch players for this server
             players_cursor = interaction.client.db.players.find(
-                {"server_id": server_id, "active": True},
+                {"server_id": str(server_id), "active": True},
                 {"player_id": 1, "player_name": 1}
             ).limit(1000)  # Limit to prevent huge result sets
             
@@ -173,13 +177,17 @@ async def weapon_name_autocomplete(interaction, current):
         server_id = None
         for option in interaction.data.get("options", []):
             if option.get("name") == "server_id":
-                server_id = option.get("value")
+                raw_id = option.get("value")
+                server_id = str(raw_id) if raw_id is not None else None
+                logger.debug(f"player_name_autocomplete converting server_id from {type(raw_id).__name__} to string: {server_id}")
                 break
             
             # Check in subcommands
             for suboption in option.get("options", []):
                 if suboption.get("name") == "server_id":
-                    server_id = suboption.get("value")
+                    raw_id = suboption.get("value")
+                    server_id = str(raw_id) if raw_id is not None else None
+                    logger.debug(f"player_name_autocomplete (subcommand) converting server_id from {type(raw_id).__name__} to string: {server_id}")
                     break
         
         if not server_id:
