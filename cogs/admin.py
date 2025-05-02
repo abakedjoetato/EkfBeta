@@ -45,7 +45,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Admin Role Set",
                 f"The {role.mention} role has been set as the admin role for server management."
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
             
         except Exception as e:
@@ -53,7 +53,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while setting the admin role: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @admin.command(name="premium", description="Set the premium tier for a guild")
@@ -69,7 +69,7 @@ class Admin(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Permission Denied",
                     "Only home guild administrators can use this command."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed, ephemeral=True)
                 return
             
@@ -78,7 +78,7 @@ class Admin(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Invalid Tier",
                     "Premium tier must be between 0 and 3."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -89,7 +89,7 @@ class Admin(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Invalid Guild ID",
                     "Guild ID must be a valid integer."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -99,7 +99,7 @@ class Admin(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Guild Not Found",
                     f"Could not find a guild with ID {guild_id}."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -114,7 +114,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Premium Tier Set",
                 f"The premium tier for {guild_name} has been set to **Tier {tier}**."
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
             
         except Exception as e:
@@ -122,7 +122,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while setting the premium tier: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @admin.command(name="status", description="View bot status information")
@@ -152,7 +152,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Bot Status",
                 "Current statistics and performance information"
-            )
+            , guild=ctx.guild)
             
             # Add statistics fields
             embed.add_field(name="Guilds", value=str(guild_count), inline=True)
@@ -184,7 +184,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting bot status: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @admin.command(name="sethomeguild", description="Set the home guild for the bot")
@@ -196,7 +196,7 @@ class Admin(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Permission Denied",
                     "Only the bot owner can use this command."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed, ephemeral=True)
                 return
             
@@ -210,7 +210,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Home Guild Set",
                 f"This guild ({ctx.guild.name}) has been set as the home guild for the bot."
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
             
             logger.info(f"Home guild set to {ctx.guild.name} (ID: {ctx.guild.id}) by owner")
@@ -220,7 +220,7 @@ class Admin(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while setting the home guild: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
             
 
@@ -231,7 +231,7 @@ class Admin(commands.Cog):
         embed = EmbedBuilder.create_base_embed(
             "Admin Commands Help",
             "List of available admin commands and their usage"
-        )
+        , guild=ctx.guild)
         
         # Add command descriptions
         embed.add_field(

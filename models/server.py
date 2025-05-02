@@ -29,6 +29,30 @@ class Server:
         self.last_log_line = server_data.get("last_log_line", 0)
         self.created_at = server_data.get("created_at")
         self.updated_at = server_data.get("updated_at")
+        
+        # Event notification settings - default to all enabled
+        self.event_notifications = server_data.get("event_notifications", {
+            "mission": True,
+            "airdrop": True,
+            "crash": True,
+            "trader": True,
+            "convoy": True,
+            "encounter": True,
+            "server_restart": True
+        })
+        
+        # Connection notification settings - default to all enabled
+        self.connection_notifications = server_data.get("connection_notifications", {
+            "connect": True,
+            "disconnect": True
+        })
+        
+        # Suicide notification settings - default to all enabled
+        self.suicide_notifications = server_data.get("suicide_notifications", {
+            "menu": True,
+            "fall": True,
+            "other": True
+        })
     
     @classmethod
     async def get_by_id(cls, db, server_id: str, guild_id: Optional[int] = None) -> Optional['Server']:
@@ -355,3 +379,63 @@ class Server:
         }
         
         return stats
+    
+    async def update_event_notifications(self, settings: Dict[str, bool]) -> bool:
+        """Update event notification settings
+        
+        Args:
+            settings: Dictionary of event type to boolean indicating if notifications should be sent
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Update the event_notifications field
+        update_data = {}
+        
+        # Only update the specified settings and keep existing ones
+        updated_settings = self.event_notifications.copy()
+        updated_settings.update(settings)
+        
+        update_data["event_notifications"] = updated_settings
+        
+        return await self.update(update_data)
+    
+    async def update_connection_notifications(self, settings: Dict[str, bool]) -> bool:
+        """Update connection notification settings
+        
+        Args:
+            settings: Dictionary of connection type to boolean indicating if notifications should be sent
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Update the connection_notifications field
+        update_data = {}
+        
+        # Only update the specified settings and keep existing ones
+        updated_settings = self.connection_notifications.copy()
+        updated_settings.update(settings)
+        
+        update_data["connection_notifications"] = updated_settings
+        
+        return await self.update(update_data)
+    
+    async def update_suicide_notifications(self, settings: Dict[str, bool]) -> bool:
+        """Update suicide notification settings
+        
+        Args:
+            settings: Dictionary of suicide type to boolean indicating if notifications should be sent
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Update the suicide_notifications field
+        update_data = {}
+        
+        # Only update the specified settings and keep existing ones
+        updated_settings = self.suicide_notifications.copy()
+        updated_settings.update(settings)
+        
+        update_data["suicide_notifications"] = updated_settings
+        
+        return await self.update(update_data)

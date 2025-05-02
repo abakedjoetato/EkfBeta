@@ -176,7 +176,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -186,7 +186,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Player statistics is a premium feature. Please upgrade to access this feature."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -203,7 +203,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -214,7 +214,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Player Not Found",
                     f"Player '{player_name}' not found on server {server_name}."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -591,7 +591,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting player stats: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @stats.command(name="server", description="View server statistics")
@@ -606,7 +606,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -616,7 +616,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Server statistics is a premium feature. Please upgrade to access this feature."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -631,7 +631,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -676,7 +676,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting server stats: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @stats.command(name="leaderboard", description="View player leaderboards")
@@ -709,7 +709,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -719,7 +719,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Leaderboards are a premium feature. Please upgrade to access this feature."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -736,7 +736,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -747,7 +747,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "No Data",
                     f"No player data found for '{stat}' on server {server_name}."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -767,7 +767,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 f"🏆 {stat_display} Leaderboard",
                 f"Top {len(leaderboard_data)} players on {server_name}"
-            )
+            , guild=ctx.guild)
             
             # Add leaderboard entries
             value_suffix = "m" if stat == "longest_shot" else ""
@@ -787,7 +787,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting the leaderboard: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @stats.command(name="weapon_categories", description="View statistics by weapon category")
@@ -804,7 +804,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -814,7 +814,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Weapon category statistics is a premium feature. Please upgrade to access this feature."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -831,7 +831,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     f"Server {server_id} not found. Please check your server ID."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -861,7 +861,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "No Data",
                     f"No weapon data found for server {server_name}."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
                 
@@ -883,7 +883,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 f"📊 Weapon Category Stats",
                 f"Weapon category breakdown on {server_name}"
-            )
+            , guild=ctx.guild)
             
             # Add total kills
             embed.add_field(name="Total Kills", value=str(total_kills), inline=False)
@@ -921,7 +921,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting weapon category stats: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
             
     @stats.command(name="weapon", description="View weapon statistics")
@@ -939,7 +939,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -949,7 +949,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Weapon statistics is a premium feature. Please upgrade to access this feature."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -966,7 +966,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -1007,7 +1007,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "No Data",
                     f"No data found for weapons matching '{weapon_name}' on server {server_name}."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -1054,7 +1054,7 @@ class Stats(commands.Cog):
                 embed = EmbedBuilder.create_base_embed(
                     f"🔫 {weapon_name} Stats",
                     f"Weapon statistics on {server_name}"
-                )
+                , guild=ctx.guild)
                 
                 # Add basic stats
                 embed.add_field(name="Weapon Type", value=weapon_details.get("type", weapon_category.title()), inline=True)
@@ -1129,7 +1129,7 @@ class Stats(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while getting weapon stats: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
 
 

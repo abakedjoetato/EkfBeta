@@ -5,32 +5,71 @@ import random
 import discord
 from datetime import datetime
 
-from config import EMBED_COLOR, EMBED_FOOTER, SUICIDE_MESSAGES
+from config import EMBED_THEMES, EMBED_COLOR, EMBED_FOOTER, SUICIDE_MESSAGES, SUICIDE_MESSAGES_BY_TYPE
 
 class EmbedBuilder:
     """Builder for creating Discord embeds with consistent styling"""
     
     @staticmethod
-    def create_base_embed(title=None, description=None):
-        """Create a base embed with consistent styling"""
+    def create_base_embed(title=None, description=None, guild=None):
+        """Create a base embed with consistent styling
+        
+        Args:
+            title: The title of the embed
+            description: The description of the embed
+            guild: Optional guild object to use theme from
+            
+        Returns:
+            discord.Embed: The created embed with applied theme
+        """
+        # Determine theme to use
+        theme_name = "default"
+        
+        # If a Guild model is passed, use its theme
+        if guild and hasattr(guild, 'theme'):
+            theme_name = guild.theme
+        
+        # Get theme settings
+        theme = EMBED_THEMES.get(theme_name, EMBED_THEMES["default"])
+        color = theme.get("color", EMBED_COLOR)
+        footer = theme.get("footer", EMBED_FOOTER)
+        
+        # Create embed
         embed = discord.Embed(
             title=title,
             description=description,
-            color=EMBED_COLOR,
+            color=color,
             timestamp=datetime.utcnow()
         )
-        embed.set_footer(text=EMBED_FOOTER)
+        embed.set_footer(text=footer)
         return embed
     
     @staticmethod
-    def create_kill_embed(kill_data):
-        """Create an embed for a kill event"""
+    def create_kill_embed(kill_data, guild=None):
+        """Create an embed for a kill event
+        
+        Args:
+            kill_data: Dictionary with kill event data
+            guild: Optional guild object to use theme from
+            
+        Returns:
+            discord.Embed: The created embed with kill information
+        """
         # Handle suicide case
         if kill_data["is_suicide"]:
-            suicide_message = random.choice(SUICIDE_MESSAGES)
+            # Get suicide type
+            suicide_type = kill_data.get("suicide_type", "other")
+            
+            # Choose from type-specific messages if available, otherwise from general messages
+            if suicide_type in SUICIDE_MESSAGES_BY_TYPE and SUICIDE_MESSAGES_BY_TYPE[suicide_type]:
+                suicide_message = random.choice(SUICIDE_MESSAGES_BY_TYPE[suicide_type])
+            else:
+                suicide_message = random.choice(SUICIDE_MESSAGES)
+                
             embed = EmbedBuilder.create_base_embed(
                 title="☠️ Suicide",
-                description=f"**{kill_data['killer_name']}** {suicide_message}"
+                description=f"**{kill_data['killer_name']}** {suicide_message}",
+                guild=guild
             )
             
             # Add suicide type as field
@@ -41,7 +80,7 @@ class EmbedBuilder:
             }
             embed.add_field(
                 name="Method", 
-                value=suicide_type_display.get(kill_data["suicide_type"], "Unknown"),
+                value=suicide_type_display.get(suicide_type, "Unknown"),
                 inline=True
             )
             
@@ -49,7 +88,8 @@ class EmbedBuilder:
             # Regular kill
             embed = EmbedBuilder.create_base_embed(
                 title="⚔️ Kill Feed",
-                description=f"**{kill_data['killer_name']}** killed **{kill_data['victim_name']}**"
+                description=f"**{kill_data['killer_name']}** killed **{kill_data['victim_name']}**",
+                guild=guild
             )
             
             # Add weapon field
@@ -66,8 +106,16 @@ class EmbedBuilder:
         return embed
     
     @staticmethod
-    def create_event_embed(event_data):
-        """Create an embed for a game event"""
+    def create_event_embed(event_data, guild=None):
+        """Create an embed for a game event
+        
+        Args:
+            event_data: Dictionary with event data
+            guild: Optional guild object to use theme from
+            
+        Returns:
+            discord.Embed: The created embed with event information
+        """
         # Set title and description based on event type
         event_title_map = {
             "mission": "🎯 Mission Started",
@@ -93,7 +141,7 @@ class EmbedBuilder:
         else:
             description = f"Location: **{event_data['details'][0]}**"
         
-        embed = EmbedBuilder.create_base_embed(title=title, description=description)
+        embed = EmbedBuilder.create_base_embed(title=title, description=description, guild=guild)
         
         # Add timestamp field
         timestamp_str = event_data["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
@@ -102,13 +150,14 @@ class EmbedBuilder:
         return embed
     
     @staticmethod
-    def create_stats_embed(player_data, server_name=None):
+    def create_stats_embed(player_data, server_name=None, guild=None):
         """Create an embed for player statistics"""
         player_name = player_data["player_name"]
         embed = EmbedBuilder.create_base_embed(
             title=f"📊 Player Stats: {player_name}",
             description=f"Statistics for {player_name}" + 
-                        (f" on {server_name}" if server_name else "")
+                        (f" on {server_name}" if server_name else ""),
+            guild=guild
         )
         
         # Add basic stats
@@ -163,12 +212,13 @@ class EmbedBuilder:
         return embed
     
     @staticmethod
-    def create_server_stats_embed(server_data):
+    def create_server_stats_embed(server_data, guild=None):
         """Create an embed for server statistics"""
         server_name = server_data["server_name"]
         embed = EmbedBuilder.create_base_embed(
             title=f"📊 Server Stats: {server_name}",
-            description=f"Statistics for {server_name}"
+            description=f"Statistics for {server_name}",
+            guild=guild
         )
         
         # Add basic stats
@@ -201,33 +251,56 @@ class EmbedBuilder:
         return embed
     
     @staticmethod
-    def create_error_embed(title, description):
-        """Create an embed for error messages"""
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.red(),
-            timestamp=datetime.utcnow()
-        )
-        embed.set_footer(text=EMBED_FOOTER)
+    def create_error_embed(title, description, guild=None):
+        """Create an embed for error messages
+        
+        Args:
+            title: The title of the embed
+            description: The description of the embed
+            guild: Optional guild object to use theme from
+            
+        Returns:
+            discord.Embed: The created embed with error styling
+        """
+        # Use base embed for consistent theming, but override with red for errors
+        embed = EmbedBuilder.create_base_embed(title, description, guild)
+        embed.color = discord.Color.red()
         return embed
     
     @staticmethod
-    def create_success_embed(title, description):
-        """Create an embed for success messages"""
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.green(),
-            timestamp=datetime.utcnow()
-        )
-        embed.set_footer(text=EMBED_FOOTER)
+    def create_success_embed(title, description, guild=None):
+        """Create an embed for success messages
+        
+        Args:
+            title: The title of the embed
+            description: The description of the embed
+            guild: Optional guild object to use theme from
+            
+        Returns:
+            discord.Embed: The created embed with success styling
+        """
+        # Use base embed for consistent theming
+        embed = EmbedBuilder.create_base_embed(title, description, guild)
+        # For success embeds, we'll use green if default theme, otherwise use the theme color
+        if not guild or not hasattr(guild, 'theme') or guild.theme == "default":
+            embed.color = discord.Color.green()
         return embed
     
     @staticmethod
-    def create_progress_embed(title, description, progress=None, total=None):
-        """Create an embed for progress messages"""
-        embed = EmbedBuilder.create_base_embed(title=title, description=description)
+    def create_progress_embed(title, description, progress=None, total=None, guild=None):
+        """Create an embed for progress messages
+        
+        Args:
+            title: The title of the embed
+            description: The description of the embed
+            progress: Optional current progress value
+            total: Optional total goal value
+            guild: Optional guild object to use theme from
+            
+        Returns:
+            discord.Embed: The created embed with progress information
+        """
+        embed = EmbedBuilder.create_base_embed(title=title, description=description, guild=guild)
         
         if progress is not None and total is not None:
             percentage = min(100, round((progress / total) * 100))

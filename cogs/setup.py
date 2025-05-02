@@ -50,7 +50,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Invalid Server ID",
                     "Server ID can only contain letters, numbers, and underscores."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -60,7 +60,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Invalid SFTP URL",
                     "SFTP URL should be in the format: sftp://username:password@host:port"
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -74,7 +74,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Feature Disabled",
                     "This guild does not have the Killfeed feature enabled. Please contact an administrator."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -84,7 +84,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Limit Reached",
                     f"This guild has reached the maximum number of servers ({max_servers}) for its premium tier."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -94,7 +94,7 @@ class Setup(commands.Cog):
                     embed = EmbedBuilder.create_error_embed(
                         "Server Exists",
                         f"A server with ID '{server_id}' already exists in this guild."
-                    )
+                    , guild=ctx.guild)
                     await ctx.send(embed=embed)
                     return
             
@@ -102,7 +102,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Adding Server",
                 f"Testing connection to {server_name}..."
-            )
+            , guild=ctx.guild)
             message = await ctx.send(embed=embed)
             
             # Create SFTP client to test connection
@@ -120,7 +120,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Connection Failed",
                     f"Failed to connect to SFTP server: {sftp_client.last_error}"
-                )
+                , guild=ctx.guild)
                 await message.edit(embed=embed)
                 return
             
@@ -128,7 +128,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Adding Server",
                 f"Connected successfully. Looking for CSV files..."
-            )
+            , guild=ctx.guild)
             await message.edit(embed=embed)
             
             csv_files = await sftp_client.get_all_csv_files()
@@ -136,7 +136,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "No CSV Files Found",
                     "Could not find any CSV files in the server. Please check the server ID and directory structure."
-                )
+                , guild=ctx.guild)
                 await message.edit(embed=embed)
                 await sftp_client.disconnect()
                 return
@@ -145,7 +145,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Adding Server",
                 f"Found {len(csv_files)} CSV file(s). Looking for log file..."
-            )
+            , guild=ctx.guild)
             await message.edit(embed=embed)
             
             log_file = await sftp_client.get_log_file()
@@ -170,7 +170,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error Adding Server",
                     "Failed to add server to the database. This may be due to a server limit restriction."
-                )
+                , guild=ctx.guild)
                 await message.edit(embed=embed)
                 await sftp_client.disconnect()
                 return
@@ -179,7 +179,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Server Added Successfully",
                 f"Server '{server_name}' has been added and is ready for channel setup."
-            )
+            , guild=ctx.guild)
             
             # Add connection details
             connection_status = [
@@ -212,7 +212,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while adding the server: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @setup.command(name="removeserver", description="Remove a server")
@@ -230,7 +230,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Guild Not Set Up",
                     "This guild is not set up. Please add a server first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -247,7 +247,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID '{server_id}' not found in this guild."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -295,7 +295,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Timed Out",
                     "Server removal cancelled due to timeout."
-                )
+                , guild=ctx.guild)
                 await message.edit(embed=embed, view=None)
                 return
             
@@ -304,7 +304,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Cancelled",
                     "Server removal cancelled."
-                )
+                , guild=ctx.guild)
                 await message.edit(embed=embed, view=None)
                 return
             
@@ -312,7 +312,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Removing Server",
                 f"Removing server '{server_name}' and stopping all monitoring tasks..."
-            )
+            , guild=ctx.guild)
             await message.edit(embed=embed, view=None)
             
             # Stop running tasks
@@ -336,13 +336,13 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_success_embed(
                     "Server Removed",
                     f"Server '{server_name}' has been removed successfully, along with all its data."
-                )
+                , guild=ctx.guild)
                 await message.edit(embed=embed)
             else:
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     f"Failed to remove server '{server_name}' from the database."
-                )
+                , guild=ctx.guild)
                 await message.edit(embed=embed)
             
         except Exception as e:
@@ -350,7 +350,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while removing the server: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @setup.command(name="channels", description="Configure notification channels for a server")
@@ -381,7 +381,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Guild Not Set Up",
                     "This guild is not set up. Please add a server first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -396,7 +396,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID '{server_id}' not found in this guild."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -414,7 +414,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Events and connections monitoring are premium features. Please upgrade to access these features."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -440,7 +440,7 @@ class Setup(commands.Cog):
                     embed = EmbedBuilder.create_error_embed(
                         "Premium Feature",
                         "Economy features require Premium Tier 2 or higher. Please upgrade to access these features."
-                    )
+                    , guild=ctx.guild)
                     await ctx.send(embed=embed)
                     return
                     
@@ -452,7 +452,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "No Changes",
                     "No channel updates were provided."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -463,7 +463,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_success_embed(
                     "Channels Updated",
                     f"Channels for '{server.name}' have been updated successfully."
-                )
+                , guild=ctx.guild)
                 
                 # Add channel info
                 if update_desc:
@@ -478,7 +478,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Update Failed",
                     "Failed to update server channels."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
             
         except Exception as e:
@@ -486,7 +486,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while setting up channels: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @setup.command(name="list", description="List all configured servers for this guild")
@@ -499,7 +499,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "No Servers Found",
                     "No servers have been configured for this guild yet."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -510,7 +510,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 f"Configured Servers for {ctx.guild.name}",
                 f"Total servers: {len(servers)}"
-            )
+            , guild=ctx.guild)
             
             # Add server info
             for i, server in enumerate(servers):
@@ -646,7 +646,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while listing servers: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @setup.command(name="historicalparse", description="Parse all historical data for a server")
@@ -664,7 +664,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Guild Not Set Up",
                     "This guild is not set up. Please add a server first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -673,7 +673,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Historical parsing is a premium feature. Please upgrade to access this feature."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -688,7 +688,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID '{server_id}' not found in this guild."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -715,7 +715,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while starting historical parse: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     async def _historical_parse_task(self, server, message):
@@ -736,7 +736,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Connection Failed",
                     f"Failed to connect to SFTP server: {sftp_client.last_error}"
-                )
+                , guild=ctx.guild)
                 await message.edit(embed=embed)
                 return
             
@@ -744,7 +744,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Historical Parse",
                 f"Connected to SFTP server. Retrieving CSV files..."
-            )
+            , guild=ctx.guild)
             await message.edit(embed=embed)
             
             csv_files = await sftp_client.get_all_csv_files()
@@ -752,7 +752,7 @@ class Setup(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "No CSV Files Found",
                     "Could not find any CSV files in the server."
-                )
+                , guild=ctx.guild)
                 await message.edit(embed=embed)
                 await sftp_client.disconnect()
                 return
@@ -761,57 +761,143 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Historical Parse",
                 f"Found {len(csv_files)} CSV file(s). Starting to parse data..."
-            )
+            , guild=ctx.guild)
             await message.edit(embed=embed)
             
             # Process each file
             total_kills = 0
+            total_lines = 0
+            processed_files = 0
             last_progress_update = datetime.now()
+            start_time = datetime.now()
+            total_file_size = 0
+            
+            # First calculate total size for better progress reporting
+            for file_path in csv_files:
+                size = await sftp_client.get_file_size(file_path)
+                total_file_size += size
+                
+            # Create progress embed function for reuse
+            async def update_progress(current_size, current_files, kills, estimated=None):
+                elapsed = (datetime.now() - start_time).total_seconds()
+                progress_pct = min(99.9, (current_size / max(1, total_file_size)) * 100) if total_file_size > 0 else 0
+                
+                # Calculate rate and ETA
+                kill_rate = kills / max(1, elapsed) * 60  # kills per minute
+                
+                status_lines = [
+                    f"Files: {current_files}/{len(csv_files)} ({progress_pct:.1f}%)",
+                    f"Events: {kills:,} kill events processed",
+                    f"Rate: {kill_rate:.1f} events per minute"
+                ]
+                
+                if estimated:
+                    status_lines.append(f"Estimated time remaining: {estimated}")
+                
+                embed = EmbedBuilder.create_progress_embed(
+                    "Historical Parse In Progress",
+                    "\n".join(status_lines),
+                    progress=current_size,
+                    total=total_file_size
+                )
+                await message.edit(embed=embed)
+            
+            current_size = 0
+            batch_size = 1000  # Process this many events before committing to DB
             
             for i, file_path in enumerate(csv_files):
                 # Check file size
                 file_size = await sftp_client.get_file_size(file_path)
                 
+                # Update initial progress
+                if i == 0 or (datetime.now() - last_progress_update).total_seconds() > 15:
+                    await update_progress(current_size, processed_files, total_kills)
+                    last_progress_update = datetime.now()
+                
                 # Read file in chunks
-                chunk_size = 5000  # Process 5000 lines at a time
+                chunk_size = 10000  # Process more lines at a time for efficiency
                 total_chunks = (file_size + chunk_size - 1) // chunk_size  # Ceiling division
+                
+                # Track batch for bulk inserts
+                kill_batch = []
                 
                 for chunk in range(total_chunks):
                     start_line = chunk * chunk_size
                     lines = await sftp_client.read_file(file_path, start_line, chunk_size)
+                    total_lines += len(lines)
                     
                     # Parse lines
                     kill_events = CSVParser.parse_kill_lines(lines)
-                    total_kills += len(kill_events)
                     
                     # Process kill events
                     for kill_event in kill_events:
                         # Add server ID
                         kill_event["server_id"] = server.id
+                        kill_batch.append(kill_event)
                         
-                        # Store in database
-                        await self.bot.db.kills.insert_one(kill_event)
-                        
-                        # Update player stats
-                        from cogs.killfeed import update_player_stats
-                        await update_player_stats(self.bot, server.id, kill_event)
+                        # When batch is full, insert and process
+                        if len(kill_batch) >= batch_size:
+                            # Bulk insert
+                            if kill_batch:  # Make sure batch isn't empty
+                                await self.bot.db.kills.insert_many(kill_batch)
+                                
+                                # Update player stats (bulk operation)
+                                from cogs.killfeed import update_player_stats
+                                for event in kill_batch:
+                                    await update_player_stats(self.bot, server.id, event)
+                                
+                                # Update stats and clear batch
+                                total_kills += len(kill_batch)
+                                kill_batch = []
                     
-                    # Update progress every 60 seconds
-                    if (datetime.now() - last_progress_update).total_seconds() > 60:
-                        progress_pct = (i / len(csv_files)) * 100
-                        embed = EmbedBuilder.create_base_embed(
-                            "Historical Parse In Progress",
-                            f"Parsing file {i+1}/{len(csv_files)} ({progress_pct:.1f}%)\n\n"
-                            f"Processed {total_kills} kill events so far."
-                        )
-                        await message.edit(embed=embed)
+                    # Update progress based on processed data
+                    current_chunk_size = min(chunk_size, file_size - start_line)
+                    current_size += current_chunk_size
+                    
+                    # Update progress every 60 seconds or every 3 chunks
+                    if (datetime.now() - last_progress_update).total_seconds() > 60 or chunk % 3 == 0:
+                        # Calculate ETA
+                        if current_size > 0:
+                            elapsed = (datetime.now() - start_time).total_seconds()
+                            bytes_per_second = current_size / elapsed
+                            remaining_bytes = total_file_size - current_size
+                            
+                            if bytes_per_second > 0:
+                                eta_seconds = remaining_bytes / bytes_per_second
+                                eta_str = f"{int(eta_seconds//60)}m {int(eta_seconds%60)}s"
+                            else:
+                                eta_str = "calculating..."
+                        else:
+                            eta_str = "calculating..."
+                        
+                        await update_progress(current_size, processed_files, total_kills, eta_str)
                         last_progress_update = datetime.now()
+                
+                # Process any remaining events in the batch
+                if kill_batch:
+                    await self.bot.db.kills.insert_many(kill_batch)
+                    
+                    # Update player stats (bulk operation)
+                    from cogs.killfeed import update_player_stats
+                    for event in kill_batch:
+                        await update_player_stats(self.bot, server.id, event)
+                    
+                    # Update stats
+                    total_kills += len(kill_batch)
+                    kill_batch = []
+                
+                # Mark file as processed
+                processed_files += 1
+                
+                # Update progress after each file
+                await update_progress(current_size, processed_files, total_kills)
+                last_progress_update = datetime.now()
             
             # Final update
             embed = EmbedBuilder.create_success_embed(
                 "Historical Parse Complete",
                 f"Successfully parsed {len(csv_files)} CSV file(s) and processed {total_kills} kill events."
-            )
+            , guild=ctx.guild)
             await message.edit(embed=embed)
             
             # Disconnect
@@ -822,7 +908,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Parse Cancelled",
                 "The historical parse has been cancelled."
-            )
+            , guild=ctx.guild)
             await message.edit(embed=embed)
             
         except Exception as e:
@@ -830,7 +916,7 @@ class Setup(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred during the historical parse: {e}"
-            )
+            , guild=ctx.guild)
             await message.edit(embed=embed)
     
     async def _check_permission(self, ctx) -> bool:
@@ -843,7 +929,7 @@ class Setup(commands.Cog):
         embed = EmbedBuilder.create_error_embed(
             "Permission Denied",
             "You need administrator permission or the designated admin role to use this command."
-        )
+        , guild=ctx.guild)
         await ctx.send(embed=embed, ephemeral=True)
         return False
 

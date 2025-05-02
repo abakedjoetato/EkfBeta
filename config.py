@@ -153,11 +153,43 @@ EVENT_PATTERNS = {
     "encounter": r"Special encounter triggered: (.+) at (.+)",
 }
 
-# Embed theme color (emerald green)
-EMBED_COLOR = 0x50C878
+# Embed themes for different premium tiers
+EMBED_THEMES = {
+    "default": {
+        "color": 0x50C878,  # Emerald green
+        "footer": "Tower of Temptation PvP Statistics",
+        "name": "Default"
+    },
+    "midnight": {
+        "color": 0x2C3E50,  # Dark blue/slate
+        "footer": "Tower of Temptation PvP Statistics | Midnight Theme",
+        "name": "Midnight"
+    },
+    "blood": {
+        "color": 0x8B0000,  # Dark red
+        "footer": "Tower of Temptation PvP Statistics | Blood Theme",
+        "name": "Blood"
+    },
+    "gold": {
+        "color": 0xFFD700,  # Gold
+        "footer": "Tower of Temptation PvP Statistics | Gold Theme",
+        "name": "Gold"
+    },
+    "toxic": {
+        "color": 0x39FF14,  # Neon green
+        "footer": "Tower of Temptation PvP Statistics | Toxic Theme",
+        "name": "Toxic"
+    },
+    "ghost": {
+        "color": 0xE0E0E0,  # Light gray
+        "footer": "Tower of Temptation PvP Statistics | Ghost Theme",
+        "name": "Ghost"
+    }
+}
 
-# Default embed footer
-EMBED_FOOTER = "Tower of Temptation PvP Statistics"
+# Default embed theme values (for backward compatibility)
+EMBED_COLOR = EMBED_THEMES["default"]["color"]
+EMBED_FOOTER = EMBED_THEMES["default"]["footer"]
 
 # Refresh intervals (in seconds)
 KILLFEED_REFRESH_INTERVAL = 30

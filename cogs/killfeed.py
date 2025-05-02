@@ -47,7 +47,7 @@ class Killfeed(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -62,7 +62,7 @@ class Killfeed(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     f"Server with ID {server_id} not found in this guild."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -78,7 +78,7 @@ class Killfeed(commands.Cog):
                     embed = EmbedBuilder.create_error_embed(
                         "Already Running",
                         f"Killfeed monitor for server {server_id} is already running."
-                    )
+                    , guild=ctx.guild)
                     await ctx.send(embed=embed)
                     return
             
@@ -86,7 +86,7 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Starting Killfeed Monitor",
                 f"Starting killfeed monitor for server {server_id}..."
-            )
+            , guild=ctx.guild)
             message = await ctx.send(embed=embed)
             
             # Start the task
@@ -107,7 +107,7 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Killfeed Monitor Started",
                 f"Killfeed monitor for server {server_id} has been started successfully."
-            )
+            , guild=ctx.guild)
             await message.edit(embed=embed)
             
         except Exception as e:
@@ -115,7 +115,7 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while starting the killfeed monitor: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @killfeed.command(name="stop", description="Stop monitoring killfeed for a server")
@@ -133,7 +133,7 @@ class Killfeed(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Not Running",
                     f"Killfeed monitor for server {server_id} is not running."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -148,7 +148,7 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Killfeed Monitor Stopped",
                 f"Killfeed monitor for server {server_id} has been stopped successfully."
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
             
         except Exception as e:
@@ -156,7 +156,7 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while stopping the killfeed monitor: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @killfeed.command(name="status", description="Check killfeed monitor status")
@@ -169,7 +169,7 @@ class Killfeed(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -199,7 +199,7 @@ class Killfeed(commands.Cog):
                 embed = EmbedBuilder.create_base_embed(
                     "Killfeed Monitor Status",
                     f"Currently running killfeed monitors for {ctx.guild.name}"
-                )
+                , guild=ctx.guild)
                 
                 for monitor in running_monitors:
                     embed.add_field(
@@ -211,7 +211,7 @@ class Killfeed(commands.Cog):
                 embed = EmbedBuilder.create_base_embed(
                     "Killfeed Monitor Status",
                     f"No killfeed monitors are currently running for {ctx.guild.name}."
-                )
+                , guild=ctx.guild)
                 
                 # Add instructions
                 embed.add_field(
@@ -227,7 +227,7 @@ class Killfeed(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while checking killfeed status: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     async def _check_permission(self, ctx) -> bool:
@@ -237,10 +237,12 @@ class Killfeed(commands.Cog):
             return True
         
         # If not, send error message
+        # Get the guild model for theme
+        guild_model = await Guild.get_by_id(self.bot.db, ctx.guild.id)
         embed = EmbedBuilder.create_error_embed(
             "Permission Denied",
-            "You need administrator permission or the designated admin role to use this command."
-        )
+            "You need administrator permission or the designated admin role to use this command.",
+            guild=guild_model)
         await ctx.send(embed=embed, ephemeral=True)
         return False
     
@@ -261,10 +263,25 @@ class Killfeed(commands.Cog):
                 
                 # Update message if still exists
                 try:
-                    embed = EmbedBuilder.create_error_embed(
-                        "Killfeed Monitor Failed",
-                        f"The killfeed monitor for server {server_id} has failed: {task.exception()}"
-                    )
+                    # Find the guild for the server
+                    try:
+                        guild_data = await self.bot.db.guilds.find_one({"servers.server_id": server_id})
+                        guild_model = None
+                        if guild_data:
+                            guild_model = Guild(self.bot.db, guild_data)
+                        
+                        embed = EmbedBuilder.create_error_embed(
+                            "Killfeed Monitor Failed",
+                            f"The killfeed monitor for server {server_id} has failed: {task.exception()}",
+                            guild=guild_model
+                        )
+                    except Exception as ex:
+                        # Fallback to simple error embed
+                        logger.error(f"Error creating themed embed: {ex}")
+                        embed = EmbedBuilder.create_error_embed(
+                            "Killfeed Monitor Failed",
+                            f"The killfeed monitor for server {server_id} has failed: {task.exception()}"
+                        )
                     await message.edit(embed=embed)
                 except:
                     pass
@@ -403,19 +420,30 @@ async def process_kill_event(bot, server, kill_event, channel):
         # Store in database
         await bot.db.kills.insert_one(kill_event)
         
-        # Create embed for the kill
-        embed = EmbedBuilder.create_kill_embed(kill_event)
+        # Check if this is a suicide and if notification is enabled
+        is_suicide = kill_event.get("is_suicide", False)
+        if is_suicide:
+            suicide_type = kill_event.get("suicide_type", "other")
+            if suicide_type in server.suicide_notifications and not server.suicide_notifications.get(suicide_type, True):
+                logger.debug(f"Skipping notification for {suicide_type} suicide as it's disabled for server {server.id}")
+                # We still update player stats, but don't send a message
+                await update_player_stats(bot, server.id, kill_event)
+                return
         
-        # Get guild ID for the server to check premium features
+        # Get guild data for the server to check premium features
         guild_data = await bot.db.guilds.find_one({"servers.server_id": server.id})
         has_economy = False
+        guild_model = None
         
         if guild_data:
-            guild = Guild(bot.db, guild_data)
-            has_economy = guild.check_feature_access("economy")
+            guild_model = Guild(bot.db, guild_data)
+            has_economy = guild_model.check_feature_access("economy")
+        
+        # Create embed for the kill
+        embed = EmbedBuilder.create_kill_embed(kill_event, guild=guild_model)
         
         # Add economy notification placeholder if the guild has economy feature
-        if has_economy and not kill_event["is_suicide"]:
+        if has_economy and not is_suicide:
             embed.add_field(
                 name="💰 Economy",
                 value="*Processing rewards...*",

@@ -23,6 +23,7 @@ class Guild:
         self.servers = guild_data.get("servers", [])
         self.joined_at = guild_data.get("joined_at")
         self.updated_at = guild_data.get("updated_at")
+        self.theme = guild_data.get("theme", "default")
     
     @classmethod
     async def get_by_id(cls, db, guild_id: int) -> Optional['Guild']:
@@ -215,3 +216,25 @@ class Guild:
     def get_max_servers(self) -> int:
         """Get the maximum number of servers for this guild's premium tier"""
         return PREMIUM_TIERS.get(self.premium_tier, {}).get("max_servers", 1)
+        
+    async def set_theme(self, theme_name: str) -> bool:
+        """Set the theme for the guild
+        
+        Args:
+            theme_name: The name of the theme to use
+            
+        Returns:
+            bool: True if the theme was set successfully, False otherwise
+        """
+        from config import EMBED_THEMES
+        
+        # Validate theme exists
+        if theme_name not in EMBED_THEMES and theme_name != "default":
+            return False
+            
+        # Check if guild has custom theme feature (tier 3+)
+        if theme_name != "default" and self.premium_tier < 3:
+            return False
+            
+        # Update theme
+        return await self.update({"theme": theme_name})

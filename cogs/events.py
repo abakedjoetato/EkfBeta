@@ -32,6 +32,70 @@ class Events(commands.Cog):
         if ctx.invoked_subcommand is None:
             await ctx.send("Please specify a subcommand.")
     
+    @events.command(name="help", description="Get help with events commands")
+    async def events_help(self, ctx):
+        """Show help for events commands"""
+        try:
+            embed = EmbedBuilder.create_base_embed(
+                "Events Commands Help",
+                "Use these commands to manage event monitoring and notifications for your servers."
+            , guild=ctx.guild)
+            
+            # Basic commands
+            basic_commands = [
+                "`/events start server_id:<id>` - Start monitoring events for a server",
+                "`/events stop server_id:<id>` - Stop monitoring events for a server",
+                "`/events status` - Check the status of all event monitors",
+                "`/events list server_id:<id> [event_type:all] [limit:10]` - List recent events",
+                "`/events online server_id:<id>` - List online players"
+            ]
+            
+            embed.add_field(
+                name="📊 Basic Commands",
+                value="\n".join(basic_commands),
+                inline=False
+            )
+            
+            # Notification configuration commands
+            config_commands = [
+                "`/events config server_id:<id> ...` - Configure game event notifications",
+                "  ↳ Set which game events (missions, airdrops, etc.) trigger notifications",
+                "`/events conn_config server_id:<id> ...` - Configure connection notifications",
+                "  ↳ Enable/disable player connect and disconnect notifications",
+                "`/events suicide_config server_id:<id> ...` - Configure suicide notifications",
+                "  ↳ Enable/disable different types of suicide notifications"
+            ]
+            
+            embed.add_field(
+                name="⚙️ Notification Configuration",
+                value="\n".join(config_commands),
+                inline=False
+            )
+            
+            # Customization tips
+            tips = [
+                "**Reduce Channel Spam**: Disable notifications for common events",
+                "**Focus on Important Events**: Keep rare events like airdrops enabled",
+                "**Silence Suicides**: Disable menu/fall suicides if they happen too often",
+                "**Admin Only**: These commands require administrator permissions"
+            ]
+            
+            embed.add_field(
+                name="💡 Tips",
+                value="\n".join(tips),
+                inline=False
+            )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error displaying events help: {e}", exc_info=True)
+            embed = EmbedBuilder.create_error_embed(
+                "Error",
+                f"An error occurred: {e}"
+            , guild=ctx.guild)
+            await ctx.send(embed=embed)
+    
     @events.command(name="start", description="Start monitoring events for a server")
     @app_commands.describe(server_id="The ID of the server to monitor")
     async def start(self, ctx, server_id: str):
@@ -47,7 +111,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -57,7 +121,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Events monitoring is a premium feature. Please upgrade to access this feature."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -72,7 +136,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     f"Server with ID {server_id} not found in this guild."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -88,7 +152,7 @@ class Events(commands.Cog):
                     embed = EmbedBuilder.create_error_embed(
                         "Already Running",
                         f"Events monitor for server {server_id} is already running."
-                    )
+                    , guild=ctx.guild)
                     await ctx.send(embed=embed)
                     return
             
@@ -96,7 +160,7 @@ class Events(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Starting Events Monitor",
                 f"Starting events monitor for server {server_id}..."
-            )
+            , guild=ctx.guild)
             message = await ctx.send(embed=embed)
             
             # Start the task
@@ -117,7 +181,7 @@ class Events(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Events Monitor Started",
                 f"Events monitor for server {server_id} has been started successfully."
-            )
+            , guild=ctx.guild)
             await message.edit(embed=embed)
             
         except Exception as e:
@@ -125,7 +189,7 @@ class Events(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while starting the events monitor: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @events.command(name="stop", description="Stop monitoring events for a server")
@@ -143,7 +207,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Not Running",
                     f"Events monitor for server {server_id} is not running."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -158,7 +222,7 @@ class Events(commands.Cog):
             embed = EmbedBuilder.create_success_embed(
                 "Events Monitor Stopped",
                 f"Events monitor for server {server_id} has been stopped successfully."
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
             
         except Exception as e:
@@ -166,7 +230,7 @@ class Events(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while stopping the events monitor: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @events.command(name="status", description="Check events monitor status")
@@ -179,7 +243,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -209,7 +273,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_base_embed(
                     "Events Monitor Status",
                     f"Currently running events monitors for {ctx.guild.name}"
-                )
+                , guild=ctx.guild)
                 
                 for monitor in running_monitors:
                     embed.add_field(
@@ -221,7 +285,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_base_embed(
                     "Events Monitor Status",
                     f"No events monitors are currently running for {ctx.guild.name}."
-                )
+                , guild=ctx.guild)
                 
                 # Add instructions
                 embed.add_field(
@@ -246,7 +310,7 @@ class Events(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while checking events status: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @events.command(name="list", description="List recent events for a server")
@@ -280,7 +344,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -290,7 +354,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Events monitoring is a premium feature. Please upgrade to access this feature."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -307,7 +371,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -372,7 +436,7 @@ class Events(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while listing events: {e}"
-            )
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     @events.command(name="players", description="List online players for a server")
@@ -386,7 +450,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Error",
                     "This guild is not set up. Please use the setup commands first."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -396,7 +460,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Premium Feature",
                     "Player connections is a premium feature. Please upgrade to access this feature."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -413,7 +477,7 @@ class Events(commands.Cog):
                 embed = EmbedBuilder.create_error_embed(
                     "Server Not Found",
                     f"Server with ID {server_id} not found in this guild."
-                )
+                , guild=ctx.guild)
                 await ctx.send(embed=embed)
                 return
             
@@ -424,7 +488,7 @@ class Events(commands.Cog):
             embed = EmbedBuilder.create_base_embed(
                 "Online Players",
                 f"Currently {player_count} player(s) online on {server_name}"
-            )
+            , guild=ctx.guild)
             
             # Add players to embed
             if player_count > 0:
@@ -452,7 +516,327 @@ class Events(commands.Cog):
             embed = EmbedBuilder.create_error_embed(
                 "Error",
                 f"An error occurred while listing online players: {e}"
+            , guild=ctx.guild)
+            await ctx.send(embed=embed)
+    
+    @events.command(name="config", description="Configure event notifications")
+    @app_commands.describe(
+        server_id="The ID of the server to configure",
+        mission="Enable mission event notifications (True/False)",
+        airdrop="Enable airdrop event notifications (True/False)",
+        crash="Enable crash event notifications (True/False)",
+        trader="Enable trader event notifications (True/False)",
+        convoy="Enable convoy event notifications (True/False)",
+        encounter="Enable encounter event notifications (True/False)",
+        server_restart="Enable server restart notifications (True/False)"
+    )
+    async def configure_events(self, ctx, server_id: str, 
+                             mission: Optional[bool] = None,
+                             airdrop: Optional[bool] = None,
+                             crash: Optional[bool] = None,
+                             trader: Optional[bool] = None,
+                             convoy: Optional[bool] = None,
+                             encounter: Optional[bool] = None,
+                             server_restart: Optional[bool] = None):
+        """Configure which event notifications are enabled"""
+        try:
+            # Check permissions
+            if not await self._check_permission(ctx):
+                return
+            
+            # Get server
+            server = await Server.get_by_id(self.bot.db, server_id, ctx.guild.id)
+            if not server:
+                embed = EmbedBuilder.create_error_embed(
+                    "Error",
+                    f"Could not find server with ID {server_id} for this guild."
+                , guild=ctx.guild)
+                await ctx.send(embed=embed)
+                return
+            
+            # Build settings dictionary from provided arguments
+            settings = {}
+            if mission is not None:
+                settings["mission"] = mission
+            if airdrop is not None:
+                settings["airdrop"] = airdrop
+            if crash is not None:
+                settings["crash"] = crash
+            if trader is not None:
+                settings["trader"] = trader
+            if convoy is not None:
+                settings["convoy"] = convoy
+            if encounter is not None:
+                settings["encounter"] = encounter
+            if server_restart is not None:
+                settings["server_restart"] = server_restart
+            
+            # If no settings were provided, show current settings
+            if not settings:
+                embed = EmbedBuilder.create_base_embed(
+                    "Event Notification Settings",
+                    f"Current event notification settings for {server.name}"
+                , guild=ctx.guild)
+                
+                # Add current settings to embed
+                notification_settings = []
+                for event_type, enabled in server.event_notifications.items():
+                    status = "✅ Enabled" if enabled else "❌ Disabled"
+                    notification_settings.append(f"{event_type.replace('_', ' ').title()}: {status}")
+                
+                embed.add_field(
+                    name="Event Types",
+                    value="\n".join(notification_settings) or "No event types configured",
+                    inline=False
+                )
+                
+                embed.add_field(
+                    name="How to Configure",
+                    value="Use `/events config server_id:<server_id> event_type:<true/false>` to enable or disable notifications. " \
+                          "For example, `/events config server_id:my_server mission:true airdrop:false`.",
+                    inline=False
+                )
+                
+                await ctx.send(embed=embed)
+                return
+            
+            # Update settings
+            success = await server.update_event_notifications(settings)
+            if not success:
+                embed = EmbedBuilder.create_error_embed(
+                    "Error",
+                    "Failed to update event notification settings. Please try again later."
+                , guild=ctx.guild)
+                await ctx.send(embed=embed)
+                return
+            
+            # Create success embed
+            embed = EmbedBuilder.create_success_embed(
+                "Event Notifications Updated",
+                f"Successfully updated event notification settings for {server.name}."
+            , guild=ctx.guild)
+            
+            # Add updated settings to embed
+            updated_settings = []
+            for event_type, enabled in settings.items():
+                status = "✅ Enabled" if enabled else "❌ Disabled"
+                updated_settings.append(f"{event_type.replace('_', ' ').title()}: {status}")
+            
+            embed.add_field(
+                name="Updated Settings",
+                value="\n".join(updated_settings),
+                inline=False
             )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error configuring event notifications: {e}", exc_info=True)
+            embed = EmbedBuilder.create_error_embed(
+                "Error",
+                f"An error occurred: {e}"
+            , guild=ctx.guild)
+            await ctx.send(embed=embed)
+    
+    @events.command(name="conn_config", description="Configure connection notifications")
+    @app_commands.describe(
+        server_id="The ID of the server to configure",
+        connect="Enable player connection notifications (True/False)",
+        disconnect="Enable player disconnection notifications (True/False)"
+    )
+    async def configure_connections(self, ctx, server_id: str, 
+                                connect: Optional[bool] = None,
+                                disconnect: Optional[bool] = None):
+        """Configure which connection notifications are enabled"""
+        try:
+            # Check permissions
+            if not await self._check_permission(ctx):
+                return
+            
+            # Get server
+            server = await Server.get_by_id(self.bot.db, server_id, ctx.guild.id)
+            if not server:
+                embed = EmbedBuilder.create_error_embed(
+                    "Error",
+                    f"Could not find server with ID {server_id} for this guild."
+                , guild=ctx.guild)
+                await ctx.send(embed=embed)
+                return
+            
+            # Build settings dictionary from provided arguments
+            settings = {}
+            if connect is not None:
+                settings["connect"] = connect
+            if disconnect is not None:
+                settings["disconnect"] = disconnect
+            
+            # If no settings were provided, show current settings
+            if not settings:
+                embed = EmbedBuilder.create_base_embed(
+                    "Connection Notification Settings",
+                    f"Current connection notification settings for {server.name}"
+                , guild=ctx.guild)
+                
+                # Add current settings to embed
+                notification_settings = []
+                for conn_type, enabled in server.connection_notifications.items():
+                    status = "✅ Enabled" if enabled else "❌ Disabled"
+                    notification_settings.append(f"{conn_type.replace('_', ' ').title()}: {status}")
+                
+                embed.add_field(
+                    name="Connection Types",
+                    value="\n".join(notification_settings) or "No connection types configured",
+                    inline=False
+                )
+                
+                embed.add_field(
+                    name="How to Configure",
+                    value="Use `/events conn_config server_id:<server_id> connect:<true/false> disconnect:<true/false>` to enable or disable notifications.",
+                    inline=False
+                )
+                
+                await ctx.send(embed=embed)
+                return
+            
+            # Update settings
+            success = await server.update_connection_notifications(settings)
+            if not success:
+                embed = EmbedBuilder.create_error_embed(
+                    "Error",
+                    "Failed to update connection notification settings. Please try again later."
+                , guild=ctx.guild)
+                await ctx.send(embed=embed)
+                return
+            
+            # Create success embed
+            embed = EmbedBuilder.create_success_embed(
+                "Connection Notifications Updated",
+                f"Successfully updated connection notification settings for {server.name}."
+            , guild=ctx.guild)
+            
+            # Add updated settings to embed
+            updated_settings = []
+            for conn_type, enabled in settings.items():
+                status = "✅ Enabled" if enabled else "❌ Disabled"
+                updated_settings.append(f"{conn_type.replace('_', ' ').title()}: {status}")
+            
+            embed.add_field(
+                name="Updated Settings",
+                value="\n".join(updated_settings),
+                inline=False
+            )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error configuring connection notifications: {e}", exc_info=True)
+            embed = EmbedBuilder.create_error_embed(
+                "Error",
+                f"An error occurred: {e}"
+            , guild=ctx.guild)
+            await ctx.send(embed=embed)
+    
+    @events.command(name="suicide_config", description="Configure suicide notifications")
+    @app_commands.describe(
+        server_id="The ID of the server to configure",
+        menu="Enable menu suicide notifications (True/False)",
+        fall="Enable fall damage suicide notifications (True/False)",
+        other="Enable other suicide notifications (True/False)"
+    )
+    async def configure_suicides(self, ctx, server_id: str, 
+                               menu: Optional[bool] = None,
+                               fall: Optional[bool] = None,
+                               other: Optional[bool] = None):
+        """Configure which suicide notifications are enabled"""
+        try:
+            # Check permissions
+            if not await self._check_permission(ctx):
+                return
+            
+            # Get server
+            server = await Server.get_by_id(self.bot.db, server_id, ctx.guild.id)
+            if not server:
+                embed = EmbedBuilder.create_error_embed(
+                    "Error",
+                    f"Could not find server with ID {server_id} for this guild."
+                , guild=ctx.guild)
+                await ctx.send(embed=embed)
+                return
+            
+            # Build settings dictionary from provided arguments
+            settings = {}
+            if menu is not None:
+                settings["menu"] = menu
+            if fall is not None:
+                settings["fall"] = fall
+            if other is not None:
+                settings["other"] = other
+            
+            # If no settings were provided, show current settings
+            if not settings:
+                embed = EmbedBuilder.create_base_embed(
+                    "Suicide Notification Settings",
+                    f"Current suicide notification settings for {server.name}"
+                , guild=ctx.guild)
+                
+                # Add current settings to embed
+                notification_settings = []
+                for suicide_type, enabled in server.suicide_notifications.items():
+                    status = "✅ Enabled" if enabled else "❌ Disabled"
+                    notification_settings.append(f"{suicide_type.replace('_', ' ').title()}: {status}")
+                
+                embed.add_field(
+                    name="Suicide Types",
+                    value="\n".join(notification_settings) or "No suicide types configured",
+                    inline=False
+                )
+                
+                embed.add_field(
+                    name="How to Configure",
+                    value="Use `/events suicide_config server_id:<server_id> menu:<true/false> fall:<true/false> other:<true/false>` " \
+                          "to enable or disable notifications.",
+                    inline=False
+                )
+                
+                await ctx.send(embed=embed)
+                return
+            
+            # Update settings
+            success = await server.update_suicide_notifications(settings)
+            if not success:
+                embed = EmbedBuilder.create_error_embed(
+                    "Error",
+                    "Failed to update suicide notification settings. Please try again later."
+                , guild=ctx.guild)
+                await ctx.send(embed=embed)
+                return
+            
+            # Create success embed
+            embed = EmbedBuilder.create_success_embed(
+                "Suicide Notifications Updated",
+                f"Successfully updated suicide notification settings for {server.name}."
+            , guild=ctx.guild)
+            
+            # Add updated settings to embed
+            updated_settings = []
+            for suicide_type, enabled in settings.items():
+                status = "✅ Enabled" if enabled else "❌ Disabled"
+                updated_settings.append(f"{suicide_type.replace('_', ' ').title()}: {status}")
+            
+            embed.add_field(
+                name="Updated Settings",
+                value="\n".join(updated_settings),
+                inline=False
+            )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error configuring suicide notifications: {e}", exc_info=True)
+            embed = EmbedBuilder.create_error_embed(
+                "Error",
+                f"An error occurred: {e}"
+            , guild=ctx.guild)
             await ctx.send(embed=embed)
     
     async def _check_permission(self, ctx) -> bool:
@@ -462,10 +846,12 @@ class Events(commands.Cog):
             return True
         
         # If not, send error message
+        # Get the guild model for theme
+        guild_model = await Guild.get_by_id(self.bot.db, ctx.guild.id)
         embed = EmbedBuilder.create_error_embed(
             "Permission Denied",
-            "You need administrator permission or the designated admin role to use this command."
-        )
+            "You need administrator permission or the designated admin role to use this command.",
+            guild=guild_model)
         await ctx.send(embed=embed, ephemeral=True)
         return False
     
@@ -486,10 +872,25 @@ class Events(commands.Cog):
                 
                 # Update message if still exists
                 try:
-                    embed = EmbedBuilder.create_error_embed(
-                        "Events Monitor Failed",
-                        f"The events monitor for server {server_id} has failed: {task.exception()}"
-                    )
+                    # Find the guild for the server
+                    try:
+                        guild_data = await self.bot.db.guilds.find_one({"servers.server_id": server_id})
+                        guild_model = None
+                        if guild_data:
+                            guild_model = Guild(self.bot.db, guild_data)
+                        
+                        embed = EmbedBuilder.create_error_embed(
+                            "Events Monitor Failed",
+                            f"The events monitor for server {server_id} has failed: {task.exception()}",
+                            guild=guild_model
+                        )
+                    except Exception as ex:
+                        # Fallback to simple error embed
+                        logger.error(f"Error creating themed embed: {ex}")
+                        embed = EmbedBuilder.create_error_embed(
+                            "Events Monitor Failed",
+                            f"The events monitor for server {server_id} has failed: {task.exception()}"
+                        )
                     await message.edit(embed=embed)
                 except:
                     pass
@@ -651,8 +1052,20 @@ async def process_event(bot, server, event_data, channel):
         # Create event in database
         event = await Event.create(bot.db, event_data)
         
+        # Check if this type of event notification is enabled
+        event_type = event_data.get("type")
+        if event_type in server.event_notifications and not server.event_notifications.get(event_type, True):
+            logger.debug(f"Skipping notification for {event_type} event as it's disabled for server {server.id}")
+            return
+        
+        # Get guild model for themed embed
+        guild_data = await bot.db.guilds.find_one({"servers.server_id": server.id})
+        guild_model = None
+        if guild_data:
+            guild_model = Guild(bot.db, guild_data)
+        
         # Create embed for the event
-        embed = EmbedBuilder.create_event_embed(event_data)
+        embed = EmbedBuilder.create_event_embed(event_data, guild=guild_model)
         
         # Send to channel
         await channel.send(embed=embed)
@@ -679,27 +1092,44 @@ async def process_connection(bot, server, connection_data, channel):
         # Create connection in database
         connection = await Connection.create(bot.db, connection_data)
         
-        # Create embed for the connection
+        # Get connection action
         action = connection_data["action"]
+        
+        # Check if this type of connection notification is enabled
+        if action in server.connection_notifications and not server.connection_notifications.get(action, True):
+            logger.debug(f"Skipping notification for {action} connection as it's disabled for server {server.id}")
+            return
+        
+        # Get guild model for themed embed
+        guild_data = await bot.db.guilds.find_one({"servers.server_id": server.id})
+        guild_model = None
+        if guild_data:
+            guild_model = Guild(bot.db, guild_data)
+
+        # Create base embed with theme
+        if action == "connected":
+            title = "🟢 Player Connected"
+        else:
+            title = "🔴 Player Disconnected"
+            
         player_name = connection_data["player_name"]
         platform = connection_data.get("platform", "Unknown")
         
-        if action == "connected":
-            title = "🟢 Player Connected"
-            color = discord.Color.green()
-        else:
-            title = "🔴 Player Disconnected"
-            color = discord.Color.red()
-        
-        embed = discord.Embed(
+        # Create themed base embed
+        embed = EmbedBuilder.create_base_embed(
             title=title,
             description=f"**{player_name}** has {action} to the server",
-            color=color,
-            timestamp=connection_data["timestamp"]
+            guild=guild_model
         )
         
+        # Override color for connection status
+        if action == "connected":
+            embed.color = discord.Color.green()
+        else:
+            embed.color = discord.Color.red()
+            
+        embed.timestamp = connection_data["timestamp"]
         embed.add_field(name="Platform", value=platform, inline=True)
-        embed.set_footer(text=f"Tower of Temptation PvP Statistics")
         
         # Send to channel
         await channel.send(embed=embed)
