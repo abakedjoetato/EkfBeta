@@ -422,6 +422,7 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
             
         # Verify channel configuration
         killfeed_channel_id = server.killfeed_channel_id
+        channel_configured = True
         if not killfeed_channel_id:
             logger.warning(f"No killfeed channel configured for server {server_id} in guild {guild_id}")
             # Send a direct message to administrators about missing configuration
@@ -437,7 +438,9 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
                             await admin.send(f"⚠️ Killfeed notifications for server {server.name} cannot be sent because no killfeed channel is configured. Please use `/setup setup_channels` to set one up.")
             except Exception as notify_e:
                 logger.warning(f"Could not notify admin about missing killfeed channel: {notify_e}")
-            return
+            # Instead of returning, we'll continue but mark that we don't have a channel
+            channel_configured = False
+            logger.info(f"Continuing killfeed monitor for server {server_id} without a channel - data will be processed but not displayed")
         
         # Create SFTP client connection
         sftp_client = SFTPClient(
@@ -449,6 +452,7 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
         )
         
         # Try to connect
+        sftp_connected = False
         connected = await sftp_client.connect()
         if not connected:
             logger.error(f"Failed to connect to SFTP server for {server_id}: {sftp_client.last_error}")
@@ -459,50 +463,86 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
                     await guild.owner.send(f"⚠️ Could not connect to SFTP server for {server.name}. Error: {sftp_client.last_error}")
             except Exception:
                 pass  # Silently ignore if we can't message the owner
-            return
+            # Don't return here, we'll try to reconnect later
+            sftp_connected = False
+        else:
+            sftp_connected = True
         
-        # Store client for later use
+        # Store client for later use, even if not connected
         bot.sftp_connections[f"{guild_id}_{server_id}"] = sftp_client
+        
+        # If not connected, we'll log it and try to reconnect periodically
+        if not sftp_connected:
+            logger.warning(f"Not connected to SFTP for server {server_id}, will attempt periodic reconnection")
         
         # Get killfeed channel
         guild = bot.get_guild(guild_id)
         if not guild:
-            logger.error(f"Guild {guild_id} not found")
-            await sftp_client.disconnect()
-            return
+            logger.error(f"Guild {guild_id} not found - will continue processing data without sending Discord messages")
+            # Don't return here, we'll still process data for when the guild is available later
         
-        killfeed_channel_id = server.killfeed_channel_id
-        killfeed_channel = guild.get_channel(killfeed_channel_id)
-        if not killfeed_channel:
+        killfeed_channel = None
+        if channel_configured and guild:  # Only try to get the channel if guild exists
+            killfeed_channel_id = server.killfeed_channel_id
+            # Log channel ID details for diagnosis
+            logger.info(f"Retrieved killfeed_channel_id: {killfeed_channel_id} (type: {type(killfeed_channel_id).__name__})")
+            
+            # Ensure the channel ID is an integer
             try:
-                # Try to fetch channel through HTTP API in case it's not in cache
-                killfeed_channel = await guild.fetch_channel(killfeed_channel_id)
-            except discord.NotFound:
-                logger.error(f"Killfeed channel {killfeed_channel_id} not found in guild {guild_id}")
-                await sftp_client.disconnect()
-                return
-            except Exception as fetch_e:
-                logger.error(f"Error fetching killfeed channel: {fetch_e}")
-                await sftp_client.disconnect()
-                return
+                if killfeed_channel_id is not None:
+                    # Convert to int if it's not already
+                    if not isinstance(killfeed_channel_id, int):
+                        killfeed_channel_id = int(killfeed_channel_id)
+                        logger.info(f"Converted killfeed_channel_id to int: {killfeed_channel_id}")
+                    
+                    # Try to get the channel
+                    killfeed_channel = guild.get_channel(killfeed_channel_id)
+                    logger.info(f"Attempted to get channel: {killfeed_channel_id}, result: {killfeed_channel is not None}")
+                    
+                    if not killfeed_channel:
+                        try:
+                            # Try to fetch channel through HTTP API in case it's not in cache
+                            logger.info(f"Channel not in cache, trying HTTP fetch for: {killfeed_channel_id}")
+                            killfeed_channel = await guild.fetch_channel(killfeed_channel_id)
+                            logger.info(f"HTTP fetch successful for channel: {killfeed_channel.name if killfeed_channel else None}")
+                        except discord.NotFound:
+                            logger.error(f"Killfeed channel {killfeed_channel_id} not found in guild {guild_id}")
+                            channel_configured = False
+                            logger.info(f"Channel not found, continuing without killfeed channel for server {server_id}")
+                        except Exception as fetch_e:
+                            logger.error(f"Error fetching killfeed channel: {fetch_e}")
+                            channel_configured = False
+                            logger.info(f"Error fetching channel, continuing without killfeed channel for server {server_id}")
+                else:
+                    logger.warning(f"No killfeed_channel_id found for server {server_id}")
+                    channel_configured = False
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error converting killfeed_channel_id to int: {e}")
+                channel_configured = False
+        else:
+            channel_configured = False
+            logger.info(f"Guild or channel not available, continuing without killfeed channel for server {server_id}")
         
         # Send initial notification to confirm monitor is running
-        try:
-            guild_model = await Guild.get_by_id(bot.db, guild_id)
-            embed = EmbedBuilder.create_base_embed(
-                "Killfeed Monitor Active",
-                f"Monitoring killfeed for server {server.name} (ID: {server_id}).",
-                guild=guild_model
-            )
-            embed.add_field(
-                name="Status", 
-                value="Active and monitoring for new kills", 
-                inline=False
-            )
-            embed.set_footer(text=f"Started at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Powered By Discord.gg/EmeraldServers")
-            await killfeed_channel.send(embed=embed)
-        except Exception as notify_e:
-            logger.warning(f"Could not send startup notification: {notify_e}")
+        if channel_configured and killfeed_channel:
+            try:
+                guild_model = await Guild.get_by_id(bot.db, guild_id)
+                embed = EmbedBuilder.create_base_embed(
+                    "Killfeed Monitor Active",
+                    f"Monitoring killfeed for server {server.name} (ID: {server_id}).",
+                    guild=guild_model
+                )
+                embed.add_field(
+                    name="Status", 
+                    value="Active and monitoring for new kills", 
+                    inline=False
+                )
+                embed.set_footer(text=f"Started at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Powered By Discord.gg/EmeraldServers")
+                await killfeed_channel.send(embed=embed)
+            except Exception as notify_e:
+                logger.warning(f"Could not send startup notification: {notify_e}")
+        else:
+            logger.info(f"No killfeed channel configured for server {server_id}, monitoring will run silently until channel is configured")
         
         # Main monitoring loop
         consecutive_errors = 0
@@ -583,9 +623,10 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
                 
                 # Process each kill event
                 processed_events = 0
+                # Always process kill events, even if no channel is configured
                 for kill_event in kill_events:
                     try:
-                        await process_kill_event(bot, server, kill_event, killfeed_channel)
+                        await process_kill_event(bot, server, kill_event, killfeed_channel if killfeed_channel else None)
                         processed_events += 1
                     except Exception as event_e:
                         logger.error(f"Error processing kill event: {event_e}", exc_info=True)
@@ -655,20 +696,30 @@ async def start_killfeed_monitor(bot, guild_id: int, server_id: str):
             if guild:
                 server = await Server.get_by_id(bot.db, server_id, guild_id)
                 if server and server.killfeed_channel_id:
-                    channel = guild.get_channel(server.killfeed_channel_id)
-                    if channel:
-                        guild_model = await Guild.get_by_id(bot.db, guild_id)
-                        embed = EmbedBuilder.create_error_embed(
-                            "Killfeed Monitor Stopped",
-                            f"The killfeed monitor for server {server.name} has stopped.",
-                            guild=guild_model
-                        )
-                        embed.add_field(
-                            name="Restart", 
-                            value="Use `/killfeed start` to restart the monitor.", 
-                            inline=False
-                        )
-                        await channel.send(embed=embed)
+                    try:
+                        # Ensure channel ID is an integer
+                        channel_id = server.killfeed_channel_id
+                        if not isinstance(channel_id, int):
+                            channel_id = int(channel_id)
+                            logger.info(f"Converted killfeed shutdown notification channel_id to int: {channel_id}")
+                            
+                        channel = guild.get_channel(channel_id)
+                        if channel:
+                            guild_model = await Guild.get_by_id(bot.db, guild_id)
+                            embed = EmbedBuilder.create_error_embed(
+                                "Killfeed Monitor Stopped",
+                                f"The killfeed monitor for server {server.name} has stopped.",
+                                guild=guild_model
+                            )
+                            embed.add_field(
+                                name="Restart", 
+                                value="Use `/killfeed start` to restart the monitor.", 
+                                inline=False
+                            )
+                            await channel.send(embed=embed)
+                    except Exception as inner_e:
+                        logger.error(f"Error in inner killfeed shutdown notification block: {inner_e}")
+                        # Do not re-raise, let outer handler handle it
         except Exception as notify_e:
             logger.warning(f"Could not send shutdown notification: {notify_e}")
 
@@ -720,12 +771,20 @@ async def process_kill_event(bot, server, kill_event, channel):
         from utils.embed_icons import create_discord_file, KILLFEED_ICON
         icon_file = create_discord_file(KILLFEED_ICON)
         
-        # Send to channel with the icon file
-        if icon_file:
-            kill_message = await channel.send(embed=embed, file=icon_file)
+        # Send to channel with the icon file if channel exists
+        kill_message = None
+        if channel:
+            try:
+                if icon_file:
+                    kill_message = await channel.send(embed=embed, file=icon_file)
+                else:
+                    # Fallback if file can't be created
+                    kill_message = await channel.send(embed=embed)
+            except Exception as send_error:
+                logger.error(f"Error sending kill event to channel: {send_error}")
         else:
-            # Fallback if file can't be created
-            kill_message = await channel.send(embed=embed)
+            # No channel to send to, but we still log this and continue processing
+            logger.info(f"Kill event processed but not displayed (no channel): {kill_event['killer_name']} killed {kill_event['victim_name']} with {kill_event['weapon']} from {kill_event.get('distance', 0)}m")
         
         # Update player stats and get economy results
         await update_player_stats(bot, server.id, kill_event)
@@ -785,8 +844,11 @@ async def process_kill_event(bot, server, kill_event, channel):
                             inline=False
                         )
                         
-                        # Update the message
-                        await kill_message.edit(embed=embed)
+                        # Update the message if it exists
+                        if kill_message:
+                            await kill_message.edit(embed=embed)
+                        else:
+                            logger.debug(f"Economy info processed but message not updated (no channel): {kill_event['killer_name']} earned {base_reward + streak_bonus} credits")
             except Exception as e:
                 logger.error(f"Error updating economy info in embed: {e}", exc_info=True)
         

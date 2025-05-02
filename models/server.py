@@ -106,38 +106,152 @@ class Server:
         # Set updated timestamp
         update_data["updated_at"] = datetime.utcnow().isoformat()
         
-        # Log the update operation for debugging
+        # Log the update operation for detailed debugging
         logger.info(f"Updating server {self.id} in guild {self.guild_id} with data: {update_data}")
+        
+        # Ensure channel IDs are stored as integers, not strings
+        channel_id_fields = [
+            "killfeed_channel_id", "events_channel_id", "connections_channel_id", 
+            "economy_channel_id", "voice_status_channel_id"
+        ]
+        
+        # Convert any channel IDs to integers before updating
+        for field in channel_id_fields:
+            if field in update_data and update_data[field] is not None:
+                try:
+                    # Ensure channel IDs are stored as integers
+                    update_data[field] = int(update_data[field])
+                    logger.info(f"Converted {field} to integer: {update_data[field]}")
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Error converting {field} to integer: {e}")
         
         # Update specific fields in the server document within the guild
         try:
+            # Simplify the query to ensure we match the exact server
+            # Convert guild_id to int to ensure consistent type matching
+            int_guild_id = int(self.guild_id) if str(self.guild_id).isdigit() else self.guild_id
+            
+            # Direct query for the specific server using the server_id
+            # This is the most reliable way to find the exact server document
+            query = {
+                "guild_id": int_guild_id,
+                "servers.server_id": self.id
+            }
+            
+            # Create the update document with proper dot notation for nested fields
+            update_doc = {}
+            for key, value in update_data.items():
+                update_doc[f"servers.$.{key}"] = value
+            
+            # Execute the update with detailed logging
+            logger.info(f"Executing MongoDB update with query: {query}")
+            logger.info(f"Update document: {update_doc}")
+            
             result = await self.db.guilds.update_one(
-                {
-                    "guild_id": str(self.guild_id),
-                    "servers.server_id": self.id
-                },
-                {"$set": {f"servers.$.{key}": value for key, value in update_data.items()}}
+                query,
+                {"$set": update_doc}
             )
             
             logger.info(f"MongoDB update result: matched={result.matched_count}, modified={result.modified_count}")
             
-            # Update local data
+            # Update local data if the update was successful
             if result.matched_count > 0:
                 for key, value in update_data.items():
                     setattr(self, key, value)
                     self.data[key] = value
+                
+                # Verify the update was actually saved by retrieving the document again
+                verification_doc = await self.db.guilds.find_one({
+                    "guild_id": int_guild_id,
+                    "servers.server_id": self.id
+                })
+                
+                if verification_doc:
+                    # Find the updated server in the servers array
+                    for server in verification_doc.get("servers", []):
+                        if server.get("server_id") == self.id:
+                            # Verify each updated field
+                            for key, value in update_data.items():
+                                actual_value = server.get(key)
+                                logger.info(f"Verification - Field '{key}': expected={value}, actual={actual_value}")
+                                if actual_value != value:
+                                    logger.warning(f"Field '{key}' was not updated correctly. Expected: {value}, Got: {actual_value}")
+                            break
+                
                 return True
             else:
-                # If no document was matched, the server might be missing
-                logger.error(f"Failed to update server {self.id}: No matching document found in MongoDB")
-                # Let's validate that the server exists in the database
-                guild_doc = await self.db.guilds.find_one({"guild_id": str(self.guild_id)})
-                if guild_doc:
-                    server_exists = any(s.get("server_id") == self.id for s in guild_doc.get("servers", []))
-                    logger.info(f"Server existence check: {'Exists' if server_exists else 'Not found'} in guild doc")
-                else:
+                # If no document was matched, try the fallback method
+                logger.warning(f"Initial update failed for server {self.id}. Trying fallback update method.")
+                
+                # Retrieve the guild document to confirm it exists
+                guild_doc = await self.db.guilds.find_one({"guild_id": int_guild_id})
+                if not guild_doc:
                     logger.error(f"Guild {self.guild_id} not found in MongoDB")
+                    return False
+                
+                # Search for the server in the guild document
+                server_exists = False
+                server_data = None
+                
+                for server in guild_doc.get("servers", []):
+                    s_id = server.get("server_id")
+                    logger.info(f"Checking server in DB: {s_id} (type: {type(s_id)}) against {self.id} (type: {type(self.id)})")
+                    
+                    # Compare server IDs (including type conversion if needed)
+                    if str(s_id) == str(self.id):
+                        server_exists = True
+                        server_data = server
+                        logger.info(f"Found server with ID: {s_id} (type: {type(s_id)})")
+                        break
+                
+                if server_exists and server_data:
+                    # Fallback method: Replace the entire server document
+                    logger.info(f"Using fallback update method for server {self.id}")
+                    
+                    # Create an updated copy of the server data
+                    updated_server = server_data.copy()
+                    for key, value in update_data.items():
+                        updated_server[key] = value
+                    
+                    try:
+                        # First, remove the old server document
+                        pull_result = await self.db.guilds.update_one(
+                            {"guild_id": int_guild_id},
+                            {"$pull": {"servers": {"server_id": self.id}}}
+                        )
+                        
+                        logger.info(f"Pull result: matched={pull_result.matched_count}, modified={pull_result.modified_count}")
+                        
+                        # Then add the updated server document
+                        push_result = await self.db.guilds.update_one(
+                            {"guild_id": int_guild_id},
+                            {"$push": {"servers": updated_server}}
+                        )
+                        
+                        logger.info(f"Push result: matched={push_result.matched_count}, modified={push_result.modified_count}")
+                        
+                        if push_result.modified_count > 0:
+                            # Update local data
+                            for key, value in update_data.items():
+                                setattr(self, key, value)
+                                self.data[key] = value
+                            
+                            # Verify the update was successful
+                            verification = await self.db.guilds.find_one({
+                                "guild_id": int_guild_id,
+                                "servers.server_id": self.id
+                            })
+                            
+                            if verification:
+                                logger.info(f"Fallback update successful for server {self.id}")
+                                return True
+                    except Exception as alt_e:
+                        logger.error(f"Error in fallback update method: {alt_e}", exc_info=True)
+                else:
+                    logger.error(f"Server {self.id} not found in guild document")
             
+            # If we reach this point, the update failed
+            logger.error(f"Failed to update server {self.id} in guild {self.guild_id}")
             return False
             
         except Exception as e:
@@ -146,9 +260,27 @@ class Server:
     
     async def delete(self) -> bool:
         """Delete the server"""
-        # Remove server from guild
+        # Create a query that matches both string and integer types for guild ID
+        guild_query = {
+            "$or": [
+                {"guild_id": self.guild_id},  # Original type
+                {"guild_id": str(self.guild_id)},  # String type
+                {"guild_id": int(self.guild_id) if str(self.guild_id).isdigit() else self.guild_id}  # Int type if possible
+            ]
+        }
+        
+        # Create a query that matches both string and integer server IDs
+        server_query = {
+            "$or": [
+                {"servers.server_id": self.id},  # Original type
+                {"servers.server_id": str(self.id)},  # String type
+                {"servers.server_id": int(self.id) if str(self.id).isdigit() else self.id}  # Int type if possible
+            ]
+        }
+        
+        # Remove server from guild with a robust type-flexible query
         result = await self.db.guilds.update_one(
-            {"guild_id": str(self.guild_id)},
+            {"$and": [guild_query, server_query]},
             {"$pull": {"servers": {"server_id": self.id}}}
         )
         

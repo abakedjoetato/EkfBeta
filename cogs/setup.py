@@ -523,6 +523,23 @@ class Setup(commands.Cog):
                             economy_channel: discord.TextChannel = None,
                             voice_status_channel: discord.VoiceChannel = None):
         """Configure notification channels for a server"""
+        # Start with detailed diagnostic logging for troubleshooting type inconsistency
+        # This will help verify our fixes are working
+        logger.info(f"Configuring channels for server ID: {server_id} (type: {type(server_id).__name__})")
+        logger.info(f"Setting up channels in guild ID: {ctx.guild.id} (type: {type(ctx.guild.id).__name__})")
+        
+        # Diagnostics: Check for guild data with both string and int formats
+        guild_data_string = await self.bot.db.guilds.find_one({"guild_id": str(ctx.guild.id)})
+        guild_data_int = await self.bot.db.guilds.find_one({"guild_id": ctx.guild.id})
+        
+        logger.info(f"Guild data found with string ID lookup: {guild_data_string is not None}")
+        logger.info(f"Guild data found with integer ID lookup: {guild_data_int is not None}")
+        
+        if guild_data_string:
+            logger.info(f"String lookup found guild: {guild_data_string.get('name')} with guild_id type: {type(guild_data_string.get('guild_id')).__name__}")
+        
+        if guild_data_int:
+            logger.info(f"Integer lookup found guild: {guild_data_int.get('name')} with guild_id type: {type(guild_data_int.get('guild_id')).__name__}")
         
         try:
             # Defer response to prevent timeout
@@ -593,7 +610,8 @@ class Setup(commands.Cog):
             
             # Update killfeed channel
             if killfeed_channel:
-                update_data["killfeed_channel_id"] = killfeed_channel.id
+                update_data["killfeed_channel_id"] = int(killfeed_channel.id)
+                logger.info(f"Setting killfeed_channel_id to {update_data['killfeed_channel_id']} (type: {type(update_data['killfeed_channel_id']).__name__})")
                 update_desc.append(f"Killfeed Channel: {killfeed_channel.mention}")
             
             # Check premium status for events and connections
@@ -607,17 +625,20 @@ class Setup(commands.Cog):
             
             # Update events channel
             if events_channel:
-                update_data["events_channel_id"] = events_channel.id
+                update_data["events_channel_id"] = int(events_channel.id)
+                logger.info(f"Setting events_channel_id to {update_data['events_channel_id']} (type: {type(update_data['events_channel_id']).__name__})")
                 update_desc.append(f"Events Channel: {events_channel.mention}")
             
             # Update connections channel
             if connections_channel:
-                update_data["connections_channel_id"] = connections_channel.id
+                update_data["connections_channel_id"] = int(connections_channel.id)
+                logger.info(f"Setting connections_channel_id to {update_data['connections_channel_id']} (type: {type(update_data['connections_channel_id']).__name__})")
                 update_desc.append(f"Connections Channel: {connections_channel.mention}")
             
             # Update voice status channel
             if voice_status_channel:
-                update_data["voice_status_channel_id"] = voice_status_channel.id
+                update_data["voice_status_channel_id"] = int(voice_status_channel.id)
+                logger.info(f"Setting voice_status_channel_id to {update_data['voice_status_channel_id']} (type: {type(update_data['voice_status_channel_id']).__name__})")
                 update_desc.append(f"Voice Status Channel: {voice_status_channel.mention}")
                 
             # Update economy channel (premium tier 2+ feature)
@@ -631,7 +652,8 @@ class Setup(commands.Cog):
                     await ctx.send(embed=embed)
                     return
                     
-                update_data["economy_channel_id"] = economy_channel.id
+                update_data["economy_channel_id"] = int(economy_channel.id)
+                logger.info(f"Setting economy_channel_id to {update_data['economy_channel_id']} (type: {type(update_data['economy_channel_id']).__name__})")
                 update_desc.append(f"Economy Channel: {economy_channel.mention}")
             
             # Check if any updates were provided
@@ -769,25 +791,34 @@ class Setup(commands.Cog):
                 economy_channel = None
                 voice_channel = None
                 
-                if "killfeed_channel_id" in server:
-                    channel = ctx.guild.get_channel(server["killfeed_channel_id"])
-                    killfeed_channel = channel.mention if channel else "Not found"
+                # Helper function to get channel mention with type conversion
+                def get_channel_mention(channel_id):
+                    if channel_id is None:
+                        return None
+                    try:
+                        # Ensure channel ID is an integer
+                        if not isinstance(channel_id, int):
+                            channel_id = int(channel_id)
+                        channel = ctx.guild.get_channel(channel_id)
+                        return channel.mention if channel else "Not found"
+                    except (ValueError, TypeError):
+                        logger.error(f"Error converting channel ID to integer: {channel_id}")
+                        return "Invalid ID"
                 
-                if "events_channel_id" in server:
-                    channel = ctx.guild.get_channel(server["events_channel_id"])
-                    events_channel = channel.mention if channel else "Not found"
+                if "killfeed_channel_id" in server and server["killfeed_channel_id"] is not None:
+                    killfeed_channel = get_channel_mention(server["killfeed_channel_id"])
                 
-                if "connections_channel_id" in server:
-                    channel = ctx.guild.get_channel(server["connections_channel_id"])
-                    connections_channel = channel.mention if channel else "Not found"
+                if "events_channel_id" in server and server["events_channel_id"] is not None:
+                    events_channel = get_channel_mention(server["events_channel_id"])
+                
+                if "connections_channel_id" in server and server["connections_channel_id"] is not None:
+                    connections_channel = get_channel_mention(server["connections_channel_id"])
                     
-                if "economy_channel_id" in server:
-                    channel = ctx.guild.get_channel(server["economy_channel_id"])
-                    economy_channel = channel.mention if channel else "Not found"
+                if "economy_channel_id" in server and server["economy_channel_id"] is not None:
+                    economy_channel = get_channel_mention(server["economy_channel_id"])
                 
-                if "voice_status_channel_id" in server:
-                    channel = ctx.guild.get_channel(server["voice_status_channel_id"])
-                    voice_channel = channel.mention if channel else "Not found"
+                if "voice_status_channel_id" in server and server["voice_status_channel_id"] is not None:
+                    voice_channel = get_channel_mention(server["voice_status_channel_id"])
                 
                 # Check if monitoring tasks are running
                 killfeed_running = f"killfeed_{ctx.guild.id}_{server_id}" in self.bot.background_tasks
@@ -1228,6 +1259,111 @@ class Setup(commands.Cog):
             guild=guild_model)
         await ctx.send(embed=embed, ephemeral=True)
         return False
+        
+    @setup.command(name="diagnose", description="Diagnose database type consistency issues")
+    async def diagnose_db(self, ctx, server_id: str = None):
+        """Diagnose database type consistency issues."""
+        # Defer response to prevent timeout
+        await ctx.defer()
+        
+        guild_id = ctx.guild.id
+        str_guild_id = str(guild_id)
+        
+        # Summary to be shown to the user
+        results = []
+        results.append(f"Guild ID: {guild_id} (type: {type(guild_id).__name__})")
+        
+        # Test guild lookup with different types
+        results.append("\n**Guild Lookup Tests:**")
+        
+        guild_data_int = await self.bot.db.guilds.find_one({"guild_id": guild_id})
+        guild_data_str = await self.bot.db.guilds.find_one({"guild_id": str_guild_id})
+        
+        results.append(f"- Integer lookup: {'✅ Success' if guild_data_int else '❌ Failed'}")
+        results.append(f"- String lookup: {'✅ Success' if guild_data_str else '❌ Failed'}")
+        
+        # Test with our new OR query
+        or_query = {
+            "$or": [
+                {"guild_id": guild_id},
+                {"guild_id": str_guild_id},
+                {"guild_id": int(str_guild_id) if str_guild_id.isdigit() else guild_id}
+            ]
+        }
+        guild_data_flex = await self.bot.db.guilds.find_one(or_query)
+        results.append(f"- Flexible OR query: {'✅ Success' if guild_data_flex else '❌ Failed'}")
+        
+        # If we found guild data, check stored guild ID type
+        if guild_data_flex:
+            db_guild_id = guild_data_flex.get("guild_id")
+            results.append(f"\nStored guild ID: {db_guild_id} (type: {type(db_guild_id).__name__})")
+        
+        # If server_id provided, test server lookup
+        if server_id:
+            results.append(f"\n**Server Lookup Tests for ID: {server_id}**")
+            
+            # Get Guild model with our new flexible lookup
+            guild = await Guild.get_by_id(self.bot.db, guild_id)
+            
+            if guild:
+                # Test get_server with exact match
+                server = await guild.get_server(server_id)
+                results.append(f"- Guild.get_server(): {'✅ Success' if server else '❌ Failed'}")
+                
+                # Test direct database query
+                db_server = None
+                if guild_data_flex:
+                    for srv in guild_data_flex.get("servers", []):
+                        srv_id = srv.get("server_id")
+                        results.append(f"  - DB server ID: {srv_id} (type: {type(srv_id).__name__})")
+                        if str(srv_id) == str(server_id):
+                            db_server = srv
+                            break
+                
+                results.append(f"- Direct DB lookup: {'✅ Success' if db_server else '❌ Failed'}")
+                
+                # If server found, check channel config
+                if server:
+                    results.append("\n**Channel Configuration:**")
+                    results.append(f"- Killfeed channel: {server.get('killfeed_channel_id')}")
+                    results.append(f"- Events channel: {server.get('events_channel_id')}")
+                    results.append(f"- Connections channel: {server.get('connections_channel_id')}")
+            else:
+                results.append("- Guild not found in database")
+        
+        # Send diagnostic results
+        embed = discord.Embed(
+            title="Database Diagnosis Results", 
+            description="Results of database type consistency tests",
+            color=discord.Color.blue()
+        )
+        
+        # Split results into chunks to avoid hitting embed field value limits
+        chunk_size = 1024  # Discord's limit for field values
+        chunks = []
+        current_chunk = ""
+        
+        for line in results:
+            if len(current_chunk) + len(line) + 1 > chunk_size:
+                chunks.append(current_chunk)
+                current_chunk = line
+            else:
+                if current_chunk:
+                    current_chunk += "\n"
+                current_chunk += line
+        
+        if current_chunk:
+            chunks.append(current_chunk)
+        
+        # Add chunks as fields
+        for i, chunk in enumerate(chunks):
+            embed.add_field(
+                name=f"Results {i+1}/{len(chunks)}", 
+                value=chunk, 
+                inline=False
+            )
+        
+        await ctx.send(embed=embed)
 
 
 async def setup(bot):

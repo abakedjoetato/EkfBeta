@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto text-center">
+            <div class="card bg-dark shadow">
+                <div class="card-body py-5">
+                    <h1 class="display-4 mb-4">PvP Stats Bot Dashboard</h1>
+                    <p class="lead mb-4">Welcome to the web dashboard for the Discord PvP Stats Bot. This dashboard provides additional insights into your server's data.</p>
+                    <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+                        <a href="https://discord.gg/EmeraldServers" target="_blank" class="btn btn-primary btn-lg px-4 gap-3">Join Discord</a>
+                        <a href="#" class="btn btn-outline-secondary btn-lg px-4">View Documentation</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">PvP Statistics</h5>
+                    <p class="card-text">Track kills, deaths, weapon performance, and player rankings across your game servers.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Event Tracking</h5>
+                    <p class="card-text">Monitor in-game events such as airdrops, missions, helicopter crashes, and server restarts.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Economy System</h5>
+                    <p class="card-text">Engage players with a virtual economy, including daily rewards, gambling, and leaderboards.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-lg-12">
+            <div class="alert alert-info">
+                <h4 class="alert-heading">Coming Soon!</h4>
+                <p>We're working on expanding this dashboard with advanced statistics, player profiles, and server management tools.</p>
+                <hr>
+                <p class="mb-0">Stay tuned for updates!</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

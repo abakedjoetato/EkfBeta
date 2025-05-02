@@ -1088,8 +1088,8 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
     # Check if guild exists in bot's cache
     discord_guild = bot.get_guild(int(guild_id))
     if not discord_guild:
-        logger.error(f"Guild {guild_id} not found in bot's cache - skipping events monitor")
-        return
+        logger.error(f"Guild {guild_id} not found in bot's cache - will continue processing data without sending Discord messages")
+        # Don't return here, we'll still process data for when the guild is available later
         
     logger.info(f"Starting events monitor for server {server_id} in guild {guild_id}")
     
@@ -1102,6 +1102,7 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
             
         # Verify channel configuration
         events_channel_id = server.events_channel_id
+        channel_configured = True
         if not events_channel_id:
             logger.warning(f"No events channel configured for server {server_id} in guild {guild_id}")
             
@@ -1118,10 +1119,14 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
                             await admin.send(f"⚠️ Event notifications for server {server.name} cannot be sent because no events channel is configured. Please use `/setup setup_channels` to set one up.")
             except Exception as notify_e:
                 logger.warning(f"Could not notify admin about missing events channel: {notify_e}")
-            return
+            # Instead of returning, we'll continue but mark that we don't have a channel
+            channel_configured = False
+            logger.info(f"Continuing events monitor for server {server_id} without a channel - data will be processed but not displayed")
         
         # Create SFTP client connection or use existing one
         sftp_key = f"{guild_id}_{server_id}"
+        sftp_connected = False
+        
         if sftp_key in bot.sftp_connections:
             sftp_client = bot.sftp_connections[sftp_key]
             
@@ -1137,7 +1142,13 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
                             await guild.owner.send(f"⚠️ Could not connect to SFTP server for {server.name}. Error: {sftp_client.last_error}")
                     except Exception:
                         pass  # Silently ignore if we can't message the owner
-                    return
+                    
+                    # Don't return here, we'll try to reconnect later
+                    sftp_connected = False
+                else:
+                    sftp_connected = True
+            else:
+                sftp_connected = True
         else:
             # Create new connection
             sftp_client = SFTPClient(
@@ -1152,65 +1163,130 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
             connected = await sftp_client.connect()
             if not connected:
                 logger.error(f"Failed to connect to SFTP server for {server_id}: {sftp_client.last_error}")
-                return
+                # We'll try to reconnect later, don't return here
+                sftp_connected = False
+            else:
+                sftp_connected = True
             
-            # Store client for later use
+            # Store client for later use, even if not connected
             bot.sftp_connections[sftp_key] = sftp_client
+            
+        # If not connected, we'll log it and try to reconnect periodically
+        if not sftp_connected:
+            logger.warning(f"Not connected to SFTP for server {server_id}, will attempt periodic reconnection")
         
         # Get channels
         guild = bot.get_guild(guild_id)
         if not guild:
-            logger.error(f"Guild {guild_id} not found")
-            await sftp_client.disconnect()
-            return
+            logger.error(f"Guild {guild_id} not found - will continue processing data without sending Discord messages")
+            # Don't return here, we'll still process data for when the guild is available later
         
         events_channel_id = server.events_channel_id
-        events_channel = guild.get_channel(events_channel_id) if events_channel_id else None
-        if events_channel_id and not events_channel:
-            try:
-                # Try to fetch channel through HTTP API in case it's not in cache
-                events_channel = await guild.fetch_channel(events_channel_id)
-            except discord.NotFound:
-                logger.error(f"Events channel {events_channel_id} not found in guild {guild_id}")
-                await sftp_client.disconnect()
-                return
-            except Exception as fetch_e:
-                logger.error(f"Error fetching events channel: {fetch_e}")
-                await sftp_client.disconnect()
-                return
-        
+        events_channel = None
         connections_channel_id = server.connections_channel_id
-        connections_channel = guild.get_channel(connections_channel_id) if connections_channel_id else None
-        if connections_channel_id and not connections_channel:
-            try:
-                # Try to fetch channel through HTTP API
-                connections_channel = await guild.fetch_channel(connections_channel_id)
-            except discord.NotFound:
-                logger.warning(f"Connections channel {connections_channel_id} not found in guild {guild_id}")
-                # Continue anyway, we'll just skip connection notifications
-            except Exception as fetch_e:
-                logger.warning(f"Error fetching connections channel: {fetch_e}")
+        connections_channel = None
         
+        # Log channel ID details for diagnosis
+        logger.info(f"Retrieved events_channel_id: {events_channel_id} (type: {type(events_channel_id).__name__})")
+        logger.info(f"Retrieved connections_channel_id: {connections_channel_id} (type: {type(connections_channel_id).__name__} if connections_channel_id else None)")
+        
+        # Only try to get channels if guild exists
+        if guild:
+            # Try to get events channel
+            if events_channel_id is not None:
+                try:
+                    # Ensure channel ID is an integer
+                    if not isinstance(events_channel_id, int):
+                        events_channel_id = int(events_channel_id)
+                        logger.info(f"Converted events_channel_id to int: {events_channel_id}")
+                    
+                    # Try to get the channel
+                    events_channel = guild.get_channel(events_channel_id)
+                    logger.info(f"Attempted to get events channel: {events_channel_id}, result: {events_channel is not None}")
+                    
+                    if not events_channel:
+                        try:
+                            # Try to fetch channel through HTTP API in case it's not in cache
+                            logger.info(f"Events channel not in cache, trying HTTP fetch for: {events_channel_id}")
+                            events_channel = await guild.fetch_channel(events_channel_id)
+                            logger.info(f"HTTP fetch successful for events channel: {events_channel.name if events_channel else None}")
+                        except discord.NotFound:
+                            logger.error(f"Events channel {events_channel_id} not found in guild {guild_id}")
+                            channel_configured = False
+                            logger.info(f"Channel not found, continuing without events channel for server {server_id}")
+                        except Exception as fetch_e:
+                            logger.error(f"Error fetching events channel: {fetch_e}")
+                            channel_configured = False
+                            logger.info(f"Error fetching channel, continuing without events channel for server {server_id}")
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Error converting events_channel_id to int: {e}")
+                    channel_configured = False
+            
+            # Try to get connections channel
+            if connections_channel_id is not None:
+                try:
+                    # Ensure channel ID is an integer
+                    if not isinstance(connections_channel_id, int):
+                        connections_channel_id = int(connections_channel_id)
+                        logger.info(f"Converted connections_channel_id to int: {connections_channel_id}")
+                    
+                    connections_channel = guild.get_channel(connections_channel_id)
+                    logger.info(f"Attempted to get connections channel: {connections_channel_id}, result: {connections_channel is not None}")
+                    
+                    if not connections_channel:
+                        try:
+                            # Try to fetch channel through HTTP API
+                            logger.info(f"Connections channel not in cache, trying HTTP fetch for: {connections_channel_id}")
+                            connections_channel = await guild.fetch_channel(connections_channel_id)
+                            logger.info(f"HTTP fetch successful for connections channel: {connections_channel.name if connections_channel else None}")
+                        except discord.NotFound:
+                            logger.warning(f"Connections channel {connections_channel_id} not found in guild {guild_id}")
+                            # Continue anyway, we'll just skip connection notifications
+                        except Exception as fetch_e:
+                            logger.warning(f"Error fetching connections channel: {fetch_e}")
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Error converting connections_channel_id to int: {e}")
+        else:
+            # Guild not found, can't get channels
+            channel_configured = False
+            logger.warning(f"Guild not found, cannot get channels for server {server_id}")
+        
+        # Process voice channel ID
         voice_channel_id = server.voice_status_channel_id
         
+        # Log voice channel ID details
+        logger.info(f"Retrieved voice_channel_id: {voice_channel_id} (type: {type(voice_channel_id).__name__} if voice_channel_id else None)")
+        
+        # Convert voice channel ID to int if needed
+        if voice_channel_id is not None:
+            try:
+                if not isinstance(voice_channel_id, int):
+                    voice_channel_id = int(voice_channel_id)
+                    logger.info(f"Converted voice_channel_id to int: {voice_channel_id}")
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error converting voice_channel_id to int: {e}")
+                # Don't set to None - we'll fail gracefully when we try to use it
+        
         # Send initial notification to confirm monitor is running
-        try:
-            guild_model = await Guild.get_by_id(bot.db, guild_id)
-            embed = EmbedBuilder.create_base_embed(
-                "Events Monitor Active",
-                f"Monitoring events for server {server.name} (ID: {server_id}).",
-                guild=guild_model
-            )
-            embed.add_field(
-                name="Status", 
-                value="Active and monitoring for new events", 
-                inline=False
-            )
-            embed.set_footer(text=f"Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Powered By Discord.gg/EmeraldServers")
-            if events_channel:
+        if channel_configured and events_channel:
+            try:
+                guild_model = await Guild.get_by_id(bot.db, guild_id)
+                embed = EmbedBuilder.create_base_embed(
+                    "Events Monitor Active",
+                    f"Monitoring events for server {server.name} (ID: {server_id}).",
+                    guild=guild_model
+                )
+                embed.add_field(
+                    name="Status", 
+                    value="Active and monitoring for new events", 
+                    inline=False
+                )
+                embed.set_footer(text=f"Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Powered By Discord.gg/EmeraldServers")
                 await events_channel.send(embed=embed)
-        except Exception as notify_e:
-            logger.warning(f"Could not send startup notification: {notify_e}")
+            except Exception as notify_e:
+                logger.warning(f"Could not send startup notification: {notify_e}")
+        else:
+            logger.info(f"No events channel configured for server {server_id}, monitoring will run silently until channel is configured")
         
         # Main monitoring loop
         consecutive_errors = 0
@@ -1291,20 +1367,22 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
                 
                 # Process events
                 processed_events = 0
-                if events and events_channel:
+                if events:
+                    # Always process events, even if no channel configured
                     for event_data in events:
                         try:
-                            await process_event(bot, server, event_data, events_channel)
+                            await process_event(bot, server, event_data, events_channel if events_channel else None)
                             processed_events += 1
                         except Exception as event_e:
                             logger.error(f"Error processing event: {event_e}", exc_info=True)
                 
                 # Process connections
                 processed_connections = 0
-                if connections and connections_channel:
+                if connections:
+                    # Always process connections, even if no channel configured
                     for connection_data in connections:
                         try:
-                            await process_connection(bot, server, connection_data, connections_channel)
+                            await process_connection(bot, server, connection_data, connections_channel if connections_channel else None)
                             processed_connections += 1
                         except Exception as conn_e:
                             logger.error(f"Error processing connection: {conn_e}", exc_info=True)
@@ -1315,6 +1393,11 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
                         # Get current player count
                         player_count, _ = await server.get_online_player_count()
                         
+                        # Ensure voice_channel_id is an integer
+                        if not isinstance(voice_channel_id, int):
+                            voice_channel_id = int(voice_channel_id)
+                            logger.info(f"Converted voice_channel_id to int: {voice_channel_id}")
+                            
                         # Update voice channel
                         await update_voice_channel_name(bot, guild_id, voice_channel_id, player_count)
                     except Exception as voice_e:
@@ -1381,20 +1464,30 @@ async def start_events_monitor(bot, guild_id: int, server_id: str):
             if guild:
                 server = await Server.get_by_id(bot.db, server_id, guild_id)
                 if server and server.events_channel_id:
-                    channel = guild.get_channel(server.events_channel_id)
-                    if channel:
-                        guild_model = await Guild.get_by_id(bot.db, guild_id)
-                        embed = EmbedBuilder.create_error_embed(
-                            "Events Monitor Stopped",
-                            f"The events monitor for server {server.name} has stopped.",
-                            guild=guild_model
-                        )
-                        embed.add_field(
-                            name="Restart", 
-                            value="Use `/events start` to restart the monitor.", 
-                            inline=False
-                        )
-                        await channel.send(embed=embed)
+                    try:
+                        # Ensure channel ID is an integer
+                        channel_id = server.events_channel_id
+                        if not isinstance(channel_id, int):
+                            channel_id = int(channel_id)
+                            logger.info(f"Converted shutdown notification channel_id to int: {channel_id}")
+                        
+                        channel = guild.get_channel(channel_id)
+                        if channel:
+                            guild_model = await Guild.get_by_id(bot.db, guild_id)
+                            embed = EmbedBuilder.create_error_embed(
+                                "Events Monitor Stopped",
+                                f"The events monitor for server {server.name} has stopped.",
+                                guild=guild_model
+                            )
+                            embed.add_field(
+                                name="Restart", 
+                                value="Use `/events start` to restart the monitor.", 
+                                inline=False
+                            )
+                            await channel.send(embed=embed)
+                    except Exception as inner_e:
+                        logger.error(f"Error in inner shutdown notification block: {inner_e}")
+                        # Do not re-raise, let outer handler handle it
         except Exception as notify_e:
             logger.warning(f"Could not send shutdown notification: {notify_e}")
 
@@ -1433,12 +1526,20 @@ async def process_event(bot, server, event_data, channel):
         event_icon_path = get_event_icon(event_data.get("type", "unknown"))
         icon_file = create_discord_file(event_icon_path) if event_icon_path else None
         
-        # Send to channel with the event icon
-        if icon_file:
-            await channel.send(embed=embed, file=icon_file)
+        # Send to channel with the event icon if channel exists
+        if channel:
+            try:
+                if icon_file:
+                    await channel.send(embed=embed, file=icon_file)
+                else:
+                    # Fallback if file can't be created
+                    await channel.send(embed=embed)
+            except Exception as send_error:
+                logger.error(f"Error sending event to channel: {send_error}")
         else:
-            # Fallback if file can't be created
-            await channel.send(embed=embed)
+            # No channel to send to, but we still log this and continue processing
+            event_desc = event_data.get('description', 'Unknown event')
+            logger.info(f"Event processed but not displayed (no channel): {event_desc}")
         
         # Handle server restart event specially
         if event_data["type"] == "server_restart":
@@ -1505,12 +1606,19 @@ async def process_connection(bot, server, connection_data, channel):
         from utils.embed_icons import create_discord_file, CONNECTIONS_ICON
         icon_file = create_discord_file(CONNECTIONS_ICON)
         
-        # Send to channel with connection icon
-        if icon_file:
-            await channel.send(embed=embed, file=icon_file)
+        # Send to channel with connection icon if channel exists
+        if channel:
+            try:
+                if icon_file:
+                    await channel.send(embed=embed, file=icon_file)
+                else:
+                    # Fallback if file can't be created
+                    await channel.send(embed=embed)
+            except Exception as send_error:
+                logger.error(f"Error sending connection event to channel: {send_error}")
         else:
-            # Fallback if file can't be created
-            await channel.send(embed=embed)
+            # No channel to send to, but we still log this and continue processing
+            logger.info(f"Connection event processed but not displayed (no channel): {player_name} has {action} to the server")
         
     except Exception as e:
         logger.error(f"Error processing connection: {e}", exc_info=True)
