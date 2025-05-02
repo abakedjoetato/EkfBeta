@@ -179,7 +179,7 @@ async def weapon_name_autocomplete(interaction, current):
             if option.get("name") == "server_id":
                 raw_id = option.get("value")
                 server_id = str(raw_id) if raw_id is not None else None
-                logger.debug(f"player_name_autocomplete converting server_id from {type(raw_id).__name__} to string: {server_id}")
+                logger.debug(f"weapon_name_autocomplete converting server_id from {type(raw_id).__name__} to string: {server_id}")
                 break
             
             # Check in subcommands
@@ -187,7 +187,7 @@ async def weapon_name_autocomplete(interaction, current):
                 if suboption.get("name") == "server_id":
                     raw_id = suboption.get("value")
                     server_id = str(raw_id) if raw_id is not None else None
-                    logger.debug(f"player_name_autocomplete (subcommand) converting server_id from {type(raw_id).__name__} to string: {server_id}")
+                    logger.debug(f"weapon_name_autocomplete (subcommand) converting server_id from {type(raw_id).__name__} to string: {server_id}")
                     break
         
         if not server_id:
