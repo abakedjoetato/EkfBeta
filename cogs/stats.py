@@ -481,12 +481,6 @@ class Stats(commands.Cog):
             )
             await ctx.send(embed=embed)
     
-    @stats.command(name="weapon", description="View weapon statistics")
-    @app_commands.describe(
-        server_id="The server ID to check stats for",
-        weapon_name="The weapon name to search for (partial match)"
-    )
-    @app_commands.autocomplete(server_id=server_id_autocomplete)
     @stats.command(name="weapon_categories", description="View statistics by weapon category")
     @app_commands.describe(
         server_id="The server ID to check stats for"
@@ -621,6 +615,12 @@ class Stats(commands.Cog):
             )
             await ctx.send(embed=embed)
             
+    @stats.command(name="weapon", description="View weapon statistics")
+    @app_commands.describe(
+        server_id="The server ID to check stats for",
+        weapon_name="The weapon name to search for (partial match)"
+    )
+    @app_commands.autocomplete(server_id=server_id_autocomplete)
     async def weapon_stats(self, ctx, server_id: str, weapon_name: str):
         """View statistics for a specific weapon"""
         try:

@@ -209,6 +209,38 @@ WEAPON_DETAILS = {
         "effective_range": "Medium-Long",
         "description": "Versatile assault rifle with good accuracy and moderate damage."
     },
+    "AR4-M": {
+        "type": "Assault Rifle",
+        "ammo": "5.56x45mm",
+        "damage": 38,
+        "fire_rate": "Full-Auto/Burst/Single",
+        "effective_range": "Medium",
+        "description": "Compact version of the AR4 with slightly reduced range but improved handling."
+    },
+    "Skar": {
+        "type": "Assault Rifle",
+        "ammo": "7.62x51mm",
+        "damage": 52,
+        "fire_rate": "Full-Auto/Single",
+        "effective_range": "Medium-Long",
+        "description": "High-powered battle rifle with significant damage and good range."
+    },
+    "MG-36": {
+        "type": "Assault Rifle",
+        "ammo": "5.56x45mm",
+        "damage": 38,
+        "fire_rate": "Full-Auto/Burst",
+        "effective_range": "Medium-Long",
+        "description": "Versatile assault rifle with large magazine capacity and steady fire rate."
+    },
+    "NK417": {
+        "type": "Assault Rifle",
+        "ammo": "7.62x51mm",
+        "damage": 55,
+        "fire_rate": "Full-Auto/Single",
+        "effective_range": "Long",
+        "description": "Powerful battle rifle with high damage per shot and excellent accuracy."
+    },
     
     # Sniper Rifles
     "Mosin": {
@@ -219,6 +251,14 @@ WEAPON_DETAILS = {
         "effective_range": "Long",
         "description": "Classic bolt-action rifle with high damage and accuracy."
     },
+    "Mosin-K": {
+        "type": "Sniper Rifle",
+        "ammo": "7.62x54mmR",
+        "damage": 70,
+        "fire_rate": "Bolt-Action",
+        "effective_range": "Medium-Long",
+        "description": "Shortened variant of the Mosin with slightly reduced range but improved handling."
+    },
     "VSD": {
         "type": "Sniper Rifle",
         "ammo": "7.62x54mmR",
@@ -226,6 +266,30 @@ WEAPON_DETAILS = {
         "fire_rate": "Semi-Auto",
         "effective_range": "Very Long",
         "description": "Semi-automatic sniper rifle with excellent damage and range."
+    },
+    "Grom": {
+        "type": "Sniper Rifle",
+        "ammo": "7.62x54mmR",
+        "damage": 95,
+        "fire_rate": "Bolt-Action",
+        "effective_range": "Very Long",
+        "description": "High-powered bolt-action sniper rifle with extreme damage and precision."
+    },
+    "MR5": {
+        "type": "Sniper Rifle",
+        "ammo": "7.62x51mm",
+        "damage": 80,
+        "fire_rate": "Semi-Auto",
+        "effective_range": "Long",
+        "description": "Semi-automatic marksman rifle with high damage and rapid follow-up shots."
+    },
+    "S85": {
+        "type": "Sniper Rifle",
+        "ammo": "8.5x70mm",
+        "damage": 105,
+        "fire_rate": "Bolt-Action",
+        "effective_range": "Extreme",
+        "description": "Heavy sniper rifle with devastating damage and exceptional range."
     },
     
     # Shotguns
@@ -237,6 +301,30 @@ WEAPON_DETAILS = {
         "effective_range": "Close",
         "description": "Double-barrel shotgun with devastating close-range damage."
     },
+    "Sawed-Off Shotgun": {
+        "type": "Shotgun",
+        "ammo": "12 Gauge",
+        "damage": 90,
+        "fire_rate": "Break-Action",
+        "effective_range": "Very Close",
+        "description": "Shortened shotgun with wide spread pattern but limited range."
+    },
+    "M133": {
+        "type": "Shotgun",
+        "ammo": "12 Gauge",
+        "damage": 85,
+        "fire_rate": "Pump-Action",
+        "effective_range": "Close",
+        "description": "Reliable pump-action shotgun with good capacity and solid damage."
+    },
+    "MS590": {
+        "type": "Shotgun",
+        "ammo": "12 Gauge",
+        "damage": 87,
+        "fire_rate": "Pump-Action",
+        "effective_range": "Close",
+        "description": "Tactical pump-action shotgun with improved ergonomics and reliability."
+    },
     
     # Pistols
     "IZH-70": {
@@ -246,6 +334,162 @@ WEAPON_DETAILS = {
         "fire_rate": "Semi-Auto",
         "effective_range": "Close",
         "description": "Common pistol with low damage but quick firing rate."
+    },
+    "TTk": {
+        "type": "Pistol",
+        "ammo": "7.62x25mm",
+        "damage": 35,
+        "fire_rate": "Semi-Auto",
+        "effective_range": "Close",
+        "description": "Russian military pistol with good penetration and moderate damage."
+    },
+    "Berta M9": {
+        "type": "Pistol",
+        "ammo": "9x19mm",
+        "damage": 30,
+        "fire_rate": "Semi-Auto",
+        "effective_range": "Close",
+        "description": "Standard military sidearm with balanced performance and good reliability."
+    },
+    "Scorp": {
+        "type": "Pistol",
+        "ammo": "9x19mm",
+        "damage": 28,
+        "fire_rate": "Semi-Auto",
+        "effective_range": "Close",
+        "description": "Compact pistol with good capacity and moderate stopping power."
+    },
+    "C1911": {
+        "type": "Pistol",
+        "ammo": ".45 ACP",
+        "damage": 45,
+        "fire_rate": "Semi-Auto",
+        "effective_range": "Close",
+        "description": "Classic heavy pistol with high stopping power but limited capacity."
+    },
+    "P900": {
+        "type": "Pistol",
+        "ammo": "9x19mm",
+        "damage": 32,
+        "fire_rate": "Semi-Auto",
+        "effective_range": "Close",
+        "description": "Modern tactical pistol with polymer frame and good ergonomics."
+    },
+    "F-57": {
+        "type": "Pistol",
+        "ammo": "5.7x28mm",
+        "damage": 28,
+        "fire_rate": "Semi-Auto",
+        "effective_range": "Close-Medium",
+        "description": "High-capacity pistol with armor-penetrating rounds and low recoil."
+    },
+    "R-5": {
+        "type": "Pistol",
+        "ammo": ".357 Magnum",
+        "damage": 55,
+        "fire_rate": "Double-Action",
+        "effective_range": "Close-Medium",
+        "description": "Powerful revolver with high damage per shot but limited capacity."
+    },
+    
+    # SMGs
+    "BB-19": {
+        "type": "SMG",
+        "ammo": "9x19mm",
+        "damage": 28,
+        "fire_rate": "Full-Auto/Single",
+        "effective_range": "Close-Medium",
+        "description": "Compact submachine gun with high rate of fire and controllable recoil."
+    },
+    "PP-3000": {
+        "type": "SMG",
+        "ammo": "9x19mm",
+        "damage": 30,
+        "fire_rate": "Full-Auto/Single",
+        "effective_range": "Close-Medium",
+        "description": "Modern SMG with good ergonomics and reliable performance."
+    },
+    "F-10": {
+        "type": "SMG",
+        "ammo": "10mm Auto",
+        "damage": 35,
+        "fire_rate": "Full-Auto/Single",
+        "effective_range": "Close-Medium",
+        "description": "Hard-hitting SMG with larger caliber rounds for improved stopping power."
+    },
+    "Fasam": {
+        "type": "SMG",
+        "ammo": "9x19mm",
+        "damage": 27,
+        "fire_rate": "Full-Auto/Burst/Single",
+        "effective_range": "Close-Medium",
+        "description": "Versatile SMG with multiple fire modes and good handling characteristics."
+    },
+    "UMR45": {
+        "type": "SMG",
+        "ammo": ".45 ACP",
+        "damage": 40,
+        "fire_rate": "Full-Auto/Single",
+        "effective_range": "Close-Medium",
+        "description": "Powerful SMG chambered in .45 with excellent stopping power."
+    },
+    "UAG": {
+        "type": "SMG",
+        "ammo": "9x19mm",
+        "damage": 32,
+        "fire_rate": "Full-Auto/Single",
+        "effective_range": "Close-Medium",
+        "description": "Compact SMG with folding stock and good mobility."
+    },
+    
+    # Melee
+    "Folding Knife": {
+        "type": "Melee",
+        "damage": 35,
+        "effective_range": "Melee",
+        "description": "Common folding knife for stealth kills and close combat."
+    },
+    "Combat Knife": {
+        "type": "Melee",
+        "damage": 45,
+        "effective_range": "Melee",
+        "description": "Military-grade knife with improved lethality and durability."
+    },
+    "Woodcutter's Axe": {
+        "type": "Melee",
+        "damage": 65,
+        "effective_range": "Melee",
+        "description": "Heavy axe with devastating damage but slow swing speed."
+    },
+    "Fire Axe": {
+        "type": "Melee",
+        "damage": 70,
+        "effective_range": "Melee",
+        "description": "Large, two-handed axe with maximum melee damage potential."
+    },
+    
+    # Special
+    "Dynamite": {
+        "type": "Explosive",
+        "damage": 150,
+        "effective_range": "Area Effect",
+        "description": "Throwable explosive with large area damage and structure damage."
+    },
+    "land_vehicle": {
+        "type": "Vehicle",
+        "damage": 100,
+        "effective_range": "Contact",
+        "description": "Death by vehicle impact, either by accident or intentional ramming."
+    },
+    
+    # Death types
+    "falling": {
+        "type": "Environmental Death",
+        "description": "Death caused by falling from height."
+    },
+    "suicide_by_relocation": {
+        "type": "System",
+        "description": "Player death caused by server teleportation or manual respawn."
     }
 }
 
