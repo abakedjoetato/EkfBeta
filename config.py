@@ -35,6 +35,8 @@ COLLECTIONS = {
     "kills": "kills",
     "events": "events",
     "connections": "connections",
+    "economy": "economy",
+    "transactions": "transactions",
 }
 
 # SFTP connection settings
@@ -69,17 +71,17 @@ PREMIUM_TIERS = {
     },
     1: {  # Basic premium
         "max_servers": 3,
-        "features": ["killfeed", "events", "connections"],
+        "features": ["killfeed", "events", "connections", "economy"],
         "server_slots": 3,
     },
     2: {  # Standard premium
         "max_servers": 5,
-        "features": ["killfeed", "events", "connections", "stats"],
+        "features": ["killfeed", "events", "connections", "stats", "economy", "gambling"],
         "server_slots": 5,
     },
     3: {  # Advanced premium
         "max_servers": 10,
-        "features": ["killfeed", "events", "connections", "stats", "custom_embeds"],
+        "features": ["killfeed", "events", "connections", "stats", "custom_embeds", "economy", "gambling"],
         "server_slots": 10,
     }
 }

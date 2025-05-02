@@ -115,7 +115,8 @@ async def load_extensions(bot):
         "cogs.stats",
         "cogs.events",
         "cogs.setup",
-        "cogs.premium"
+        "cogs.premium",
+        "cogs.economy"
     ]
     
     for extension in extensions:
